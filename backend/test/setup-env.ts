@@ -1,0 +1,17 @@
+process.env.NODE_ENV = 'test';
+process.env.PORT = '3000';
+process.env.JWT_SECRET = 'test-jwt-secret-123456';
+process.env.JWT_EXPIRES_IN = '15m';
+process.env.JWT_REFRESH_SECRET = 'test-refresh-secret-123456';
+process.env.JWT_REFRESH_EXPIRES_IN = '7d';
+process.env.ADMIN_EMAIL = 'admin@example.com';
+process.env.ADMIN_PASSWORD = 'AdminPass123';
+process.env.CLOUDINARY_CLOUD_NAME = 'test-cloud';
+process.env.CLOUDINARY_API_KEY = 'test-key';
+process.env.CLOUDINARY_API_SECRET = 'test-secret';
+process.env.RESEND_API_KEY = 're_test_key';
+process.env.RESEND_FROM_EMAIL = 'test@example.com';
+process.env.GEMINI_API_KEY = 'test-gemini-key';
+process.env.GEMINI_MODEL = 'gemini-2.0-flash';
+process.env.FRONTEND_URL = 'http://localhost:3001';
+process.env.PASSWORD_RESET_EXPIRES_IN = '15m';

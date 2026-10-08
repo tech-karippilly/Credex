@@ -1,0 +1,186 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-display: "Sora", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-ink: var(--ink);
+  --color-ink-foreground: var(--ink-foreground);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-border: var(--ink-border);
+  --color-cyan: var(--cyan);
+  --color-surface: var(--surface);
+  --color-success: var(--success);
+}
+
+:root {
+  --radius: 0.75rem;
+  /* Brand: Primary #003C82, Ink #00142B, Cyan #3FC7E4, Light #F8FAFD, Near-white #F6F9FB */
+  --background: oklch(0.985 0.004 250);
+  --surface: oklch(0.975 0.005 230);
+  --foreground: oklch(0.18 0.05 255);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.05 255);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.05 255);
+  --primary: oklch(0.36 0.13 257);
+  --primary-foreground: oklch(0.985 0.004 250);
+  --secondary: oklch(0.955 0.012 250);
+  --secondary-foreground: oklch(0.36 0.13 257);
+  --muted: oklch(0.955 0.01 250);
+  --muted-foreground: oklch(0.48 0.03 255);
+  --accent: oklch(0.77 0.12 215);
+  --accent-foreground: oklch(0.17 0.05 255);
+  --cyan: oklch(0.77 0.12 215);
+  --ink: oklch(0.17 0.05 255);
+  --ink-foreground: oklch(0.97 0.006 240);
+  --ink-muted: oklch(0.72 0.03 245);
+  --ink-border: oklch(1 0 0 / 10%);
+  --destructive: oklch(0.56 0.21 27);
+  --destructive-foreground: oklch(0.985 0 0);
+  --success: oklch(0.55 0.13 160);
+  --border: oklch(0.91 0.012 250);
+  --input: oklch(0.88 0.015 250);
+  --ring: oklch(0.6 0.13 240);
+  --shadow-card: 0 1px 2px oklch(0.17 0.05 255 / 4%), 0 8px 24px -12px oklch(0.17 0.05 255 / 12%);
+  --shadow-lift: 0 2px 4px oklch(0.17 0.05 255 / 4%), 0 20px 40px -16px oklch(0.36 0.13 257 / 22%);
+}
+
+@layer base {
+  * { border-color: var(--color-border); }
+  html { scroll-behavior: smooth; }
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { font-family: var(--font-display); letter-spacing: -0.025em; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 4px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+}
+
+@utility container-site {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  @media (min-width: 768px) { padding-inline: 2rem; }
+}
+
+@utility eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--primary);
+  &::before { content: ""; width: 1.5rem; height: 2px; background: var(--cyan); }
+}
+
+@utility btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 3rem;
+  padding-inline: 1.5rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  transition: background-color .2s, color .2s, border-color .2s, transform .2s, box-shadow .2s;
+  &:disabled { opacity: .6; cursor: not-allowed; }
+}
+@utility btn-primary {
+  background: var(--primary);
+  color: var(--primary-foreground);
+  &:hover { background: var(--ink); box-shadow: var(--shadow-lift); }
+}
+@utility btn-outline {
+  border: 1px solid var(--input);
+  color: var(--foreground);
+  background: var(--card);
+  &:hover { border-color: var(--primary); color: var(--primary); }
+}
+@utility btn-light {
+  background: var(--ink-foreground);
+  color: var(--ink);
+  &:hover { background: var(--cyan); }
+}
+@utility btn-ghost-light {
+  border: 1px solid var(--ink-border);
+  color: var(--ink-foreground);
+  &:hover { border-color: var(--cyan); color: var(--cyan); }
+}
+
+@utility card-site {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+  transition: box-shadow .25s, transform .25s, border-color .25s;
+}
+@utility card-hover {
+  &:hover { box-shadow: var(--shadow-lift); transform: translateY(-3px); border-color: oklch(0.36 0.13 257 / 30%); }
+}
+
+@utility field {
+  width: 100%;
+  height: 3rem;
+  padding-inline: 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--input);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 0.9375rem;
+  transition: border-color .2s, box-shadow .2s;
+  &:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px oklch(0.36 0.13 257 / 15%); }
+  &[aria-invalid="true"] { border-color: var(--destructive); }
+}
+
+@utility grid-lines {
+  background-image:
+    linear-gradient(to right, oklch(0.36 0.13 257 / 6%) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(0.36 0.13 257 / 6%) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+@utility grid-lines-dark {
+  background-image:
+    linear-gradient(to right, oklch(1 0 0 / 5%) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(1 0 0 / 5%) 1px, transparent 1px);
+  background-size: 56px 56px;
+}
+
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@utility animate-rise { animation: rise .7s cubic-bezier(.2,.7,.2,1) both; }
