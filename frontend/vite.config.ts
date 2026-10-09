@@ -18,7 +18,8 @@ export default defineConfig({
     optimizeDeps: { include: ["lucide-react", "zod"] },
     server: {
       // Cloudflare quick tunnels (cloudflared) get a new *.trycloudflare.com host each run.
-      allowedHosts: [".trycloudflare.com"],
+      // A leading dot also allows the apex host and any subdomain (www.credexfin.com).
+      allowedHosts: [".trycloudflare.com", ".credexfin.com"],
     },
   },
 });
