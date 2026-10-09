@@ -25,4 +25,28 @@ export class AiService {
 
     return text;
   }
+
+  async generateWithInlineData(
+    prompt: string,
+    mimeType: string,
+    base64Data: string,
+  ): Promise<string> {
+    const model = this.client.getGenerativeModel({ model: this.modelName });
+    const result = await model.generateContent([
+      { text: prompt },
+      {
+        inlineData: {
+          mimeType,
+          data: base64Data,
+        },
+      },
+    ]);
+    const text = result.response.text();
+
+    if (!text) {
+      throw new Error('Gemini returned an empty response');
+    }
+
+    return text;
+  }
 }

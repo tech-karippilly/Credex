@@ -162,6 +162,30 @@ export class CareersService {
     await this.careerModel.findByIdAndDelete(id).exec();
   }
 
+  async requireById(id: string): Promise<CareerDocument> {
+    return this.findDocumentById(id);
+  }
+
+  async requireVisible(id: string): Promise<CareerDocument> {
+    return this.findVisibleDocumentById(id);
+  }
+
+  async findOptionalById(id: string): Promise<CareerDocument | null> {
+    if (!isValidObjectId(id)) {
+      return null;
+    }
+
+    return this.careerModel.findById(id).exec();
+  }
+
+  async findByIds(ids: string[]): Promise<CareerDocument[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    return this.careerModel.find({ _id: { $in: ids } }).exec();
+  }
+
   private async findDocumentById(id: string): Promise<CareerDocument> {
     if (!isValidObjectId(id)) {
       throw new NotFoundException('Career not found');

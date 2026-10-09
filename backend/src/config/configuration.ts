@@ -29,6 +29,15 @@ export default () => ({
     apiKey: process.env.RESEND_API_KEY,
     fromEmail: process.env.RESEND_FROM_EMAIL,
   },
+  whatsapp: {
+    accessToken: process.env.WHATSAPP_ACCESS_TOKEN,
+    phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID,
+    businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
+    apiVersion: process.env.WHATSAPP_API_VERSION ?? 'v21.0',
+    voucherTemplateName: process.env.WHATSAPP_VOUCHER_TEMPLATE_NAME,
+    voucherTemplateLanguage:
+      process.env.WHATSAPP_VOUCHER_TEMPLATE_LANGUAGE ?? 'en',
+  },
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,
     model: process.env.GEMINI_MODEL,

@@ -1,6 +1,7 @@
 import { Logger, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
+import os from 'os';
 import { Connection } from 'mongoose';
 
 @Module({
@@ -14,7 +15,12 @@ import { Connection } from 'mongoose';
 
         return {
           uri,
-          directConnection: true,
+          ...(uri.includes('127.0.0.1') || uri.includes('localhost')
+            ? { directConnection: true }
+            : {}),
+          ...(process.env.NODE_ENV === 'test'
+            ? { runtimeAdapters: { os } }
+            : {}),
           connectionFactory: (connection: Connection) => {
             connection.on('connected', () => {
               logger.log('MongoDB connected successfully');

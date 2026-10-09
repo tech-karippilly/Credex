@@ -2,11 +2,21 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Resend } from 'resend';
 
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+}
+
 export interface SendEmailOptions {
   to: string;
   subject: string;
   html: string;
   text?: string;
+  attachments?: EmailAttachment[];
+}
+
+export interface SendEmailResult {
+  id?: string;
 }
 
 @Injectable()
@@ -21,17 +31,23 @@ export class EmailService {
     this.fromEmail = this.configService.getOrThrow<string>('resend.fromEmail');
   }
 
-  async sendEmail(options: SendEmailOptions): Promise<void> {
-    const { error } = await this.resend.emails.send({
+  async sendEmail(options: SendEmailOptions): Promise<SendEmailResult> {
+    const { data, error } = await this.resend.emails.send({
       from: this.fromEmail,
       to: options.to,
       subject: options.subject,
       html: options.html,
       text: options.text,
+      attachments: options.attachments?.map((attachment) => ({
+        filename: attachment.filename,
+        content: attachment.content,
+      })),
     });
 
     if (error) {
       throw new Error(error.message);
     }
+
+    return { id: data?.id };
   }
 }

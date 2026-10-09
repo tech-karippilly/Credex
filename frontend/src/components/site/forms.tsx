@@ -2,6 +2,8 @@ import { useState, type ReactNode } from "react";
 import { z } from "zod";
 import { CheckCircle2, Loader2, Upload, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { applicationsApi } from "@/lib/applications-api";
+import { apiErrorMessage } from "@/lib/api";
 import { useContent } from "@/lib/content";
 
 type Errors = Partial<Record<"name"|"company"|"email"|"phone"|"service"|"message"|"fullName"|"experience"|"location"|"resume", string>>;
@@ -119,11 +121,12 @@ const applySchema = z.object({
   message: z.string().trim().max(2000).optional(),
 });
 
-export function ApplyForm({ role }: { role: string }) {
+export function ApplyForm({ careerId, role }: { careerId: string; role: string }) {
   const { settings } = useContent();
   const [errors, setErrors] = useState<Errors>({});
   const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [errorText, setErrorText] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -131,22 +134,30 @@ export function ApplyForm({ role }: { role: string }) {
     const res = applySchema.safeParse(Object.fromEntries(fd));
     const errs = collectErrors(res);
     if (!file) errs.resume = "Please upload your resume";
-    else if (file.size > 5 * 1024 * 1024) errs.resume = "File must be under 5 MB";
+    else if (file.size > 10 * 1024 * 1024) errs.resume = "File must be under 10 MB";
     else if (!/\.(pdf|docx?)$/i.test(file.name)) errs.resume = "Please upload a PDF or Word document";
     setErrors(errs);
     if (Object.values(errs).some(Boolean)) return;
     if (!res.success || !file) return;
     setState("loading");
-    const ext = file.name.split(".").pop() ?? "pdf";
-    const path = `${crypto.randomUUID()}.${ext}`;
-    const up = await supabase.storage.from("resumes").upload(path, file, { contentType: file.type || "application/octet-stream" });
-    if (up.error) { setState("error"); return; }
+    setErrorText(null);
     const d = res.data;
-    const { error } = await supabase.from("job_applications").insert({
-      job_title: role, full_name: d.fullName, email: d.email, phone: d.phone, experience: d.experience,
-      location: d.location, message: d.message || null, resume_path: path,
-    });
-    setState(error ? "error" : "done");
+    try {
+      const created = await applicationsApi.create({
+        careerId,
+        name: d.fullName,
+        email: d.email,
+        phone: d.phone,
+        experience: d.experience,
+        location: d.location,
+        ...(d.message ? { coverLetter: d.message } : {}),
+      });
+      await applicationsApi.uploadResume(created.id, file);
+      setState("done");
+    } catch (error) {
+      setErrorText(apiErrorMessage(error, "Something went wrong. Please try again."));
+      setState("error");
+    }
   }
 
   if (state === "done")
@@ -171,7 +182,11 @@ export function ApplyForm({ role }: { role: string }) {
         </Field>
       </div>
       <div className="sm:col-span-2"><Field id="a-message" label="Cover Message"><textarea id="a-message" name="message" rows={4} className="field h-auto py-3" /></Field></div>
-      {state === "error" && <p role="alert" className="text-sm text-destructive sm:col-span-2">Something went wrong. Please try again or email {settings.email}.</p>}
+      {state === "error" && (
+        <p role="alert" className="text-sm text-destructive sm:col-span-2">
+          {errorText ?? "Something went wrong."} You can also email {settings.email}.
+        </p>
+      )}
       <div className="sm:col-span-2">
         <button type="submit" disabled={state === "loading"} className="btn btn-primary w-full sm:w-auto">
           {state === "loading" ? <><Loader2 className="h-4 w-4 animate-spin" /> Submitting…</> : "Submit Application"}

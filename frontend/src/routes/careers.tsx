@@ -19,15 +19,15 @@ export const Route = createFileRoute("/careers")({
 
 function Careers() {
   const { jobs, settings } = useContent();
-  const [role, setRole] = useState<string | null>(null);
+  const [applyJob, setApplyJob] = useState<{ id: string; title: string } | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
     const d = dialogRef.current;
     if (!d) return;
-    if (role && !d.open) d.showModal();
-    if (!role && d.open) d.close();
-  }, [role]);
+    if (applyJob && !d.open) d.showModal();
+    if (!applyJob && d.open) d.close();
+  }, [applyJob]);
 
   return (
     <>
@@ -46,15 +46,15 @@ function Careers() {
         )}
         <div className="mt-6 space-y-8">
           {jobs.map((job) => (
-            <JobCard key={job.id} job={job} email={settings.email} phone={settings.phone} onApply={() => setRole(job.title)} />
+            <JobCard key={job.id} job={job} email={settings.email} phone={settings.phone} onApply={() => setApplyJob({ id: job.id, title: job.title })} />
           ))}
         </div>
       </section>
 
       <dialog
         ref={dialogRef}
-        onClose={() => setRole(null)}
-        onClick={(e) => { if (e.target === dialogRef.current) setRole(null); }}
+        onClose={() => setApplyJob(null)}
+        onClick={(e) => { if (e.target === dialogRef.current) setApplyJob(null); }}
         aria-labelledby="apply-title"
         className="m-auto w-[calc(100%-2rem)] max-w-2xl rounded-2xl bg-card p-0 text-foreground backdrop:bg-ink/60 backdrop:backdrop-blur-sm"
       >
@@ -62,13 +62,13 @@ function Careers() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="eyebrow">Apply</p>
-              <h2 id="apply-title" className="mt-3 text-2xl font-semibold">{role}</h2>
+              <h2 id="apply-title" className="mt-3 text-2xl font-semibold">{applyJob?.title}</h2>
             </div>
-            <button type="button" onClick={() => setRole(null)} aria-label="Close application form" className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border hover:border-primary">
+            <button type="button" onClick={() => setApplyJob(null)} aria-label="Close application form" className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border hover:border-primary">
               <X className="h-5 w-5" />
             </button>
           </div>
-          <div className="mt-8">{role && <ApplyForm role={role} />}</div>
+          <div className="mt-8">{applyJob && <ApplyForm careerId={applyJob.id} role={applyJob.title} />}</div>
         </div>
       </dialog>
     </>

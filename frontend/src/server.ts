@@ -1,3 +1,10 @@
+import { WebSocket } from "ws";
+
+// Node.js 20 and below have no global WebSocket; @supabase/realtime-js requires one at client init.
+if (typeof globalThis.WebSocket === "undefined") {
+  globalThis.WebSocket = WebSocket as unknown as typeof globalThis.WebSocket;
+}
+
 import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";

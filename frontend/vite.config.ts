@@ -16,5 +16,9 @@ export default defineConfig({
     // Pre-bundle these up front so the preview never re-optimizes mid-session
     // (which can load two React copies and crash hooks).
     optimizeDeps: { include: ["lucide-react", "zod"] },
+    server: {
+      // Cloudflare quick tunnels (cloudflared) get a new *.trycloudflare.com host each run.
+      allowedHosts: [".trycloudflare.com"],
+    },
   },
 });

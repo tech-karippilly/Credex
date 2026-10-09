@@ -1,6 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { getConnectionToken } from '@nestjs/mongoose';
 import { Test, TestingModule } from '@nestjs/testing';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 import { Connection } from 'mongoose';
 import { AppModule } from '../src/app.module';
 import { HttpExceptionFilter } from '../src/common/filters/http-exception.filter';
@@ -13,20 +14,36 @@ export interface E2eContext {
   teardown: () => Promise<void>;
 }
 
-export async function createE2eApp(): Promise<E2eContext> {
-  const dbName = `credex_e2e_${Date.now()}`;
-  process.env.MONGODB_URI = `mongodb://127.0.0.1:27017/${dbName}`;
+export interface E2eProviderOverride {
+  provide: unknown;
+  useValue: unknown;
+}
+
+export interface CreateE2eAppOptions {
+  providerOverrides?: E2eProviderOverride[];
+}
+
+export async function createE2eApp(
+  options?: CreateE2eAppOptions,
+): Promise<E2eContext> {
+  const mongod = await MongoMemoryServer.create();
+  process.env.MONGODB_URI = mongod.getUri();
 
   const emailService = {
     sendEmail: jest.fn().mockResolvedValue(undefined),
   };
 
-  const moduleFixture: TestingModule = await Test.createTestingModule({
+  let moduleBuilder = Test.createTestingModule({
     imports: [AppModule],
-  })
-    .overrideProvider(EmailService)
-    .useValue(emailService)
-    .compile();
+  }).overrideProvider(EmailService).useValue(emailService);
+
+  for (const provider of options?.providerOverrides ?? []) {
+    moduleBuilder = moduleBuilder
+      .overrideProvider(provider.provide)
+      .useValue(provider.useValue);
+  }
+
+  const moduleFixture: TestingModule = await moduleBuilder.compile();
 
   const app = moduleFixture.createNestApplication();
   app.setGlobalPrefix('api/v1');
@@ -48,6 +65,7 @@ export async function createE2eApp(): Promise<E2eContext> {
     const connection = app.get<Connection>(getConnectionToken());
     await connection.dropDatabase();
     await app.close();
+    await mongod.stop();
   };
 
   return { app, emailService, teardown };

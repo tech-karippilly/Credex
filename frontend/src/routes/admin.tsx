@@ -1,16 +1,32 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import type { Session } from "@supabase/supabase-js";
 import {
   LayoutDashboard, Settings, Layers, Briefcase, FileText, Inbox, LogOut, Loader2, Plus, Trash2,
-  Save, ExternalLink, Upload, Eye, EyeOff, Download, Wallet, Receipt,
+  Save, ExternalLink, Upload, Eye, EyeOff, Download, Wallet, Receipt, Tags,
 } from "lucide-react";
+import { ExpenseCategoriesPanel } from "@/components/admin/expense-categories";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/site/Logo";
 import { ExpensesPanel, VouchersPanel, type VoucherDraft } from "@/components/admin/finance";
 import { ICONS, contentQuery } from "@/lib/content";
-import { DEFAULT_SETTINGS, type SiteSettings, type ServiceRow, type JobRow } from "@/lib/content.functions";
+import { DEFAULT_SETTINGS, type ServiceRow, type JobRow } from "@/lib/content.functions";
+import { authApi } from "@/lib/auth-api";
+import { apiErrorMessage, ApiError } from "@/lib/api";
+import { clearAuthSession, getStoredUser, isAuthenticated } from "@/lib/auth-storage";
+import type { AuthUser } from "@/lib/api-types";
+import { siteContactApi } from "@/lib/site-contact-api";
+import { servicesApi } from "@/lib/services-api";
+import { applicationsApi, type JobApplication } from "@/lib/applications-api";
+import { careersApi } from "@/lib/careers-api";
+import {
+  careerToJobRow,
+  serviceToRow,
+  settingsToSiteContact,
+  siteContactToSettings,
+  type SiteSettingsForm,
+} from "@/lib/cms-mappers";
+import { OG_IMAGE_URL, siteIconLinks } from "@/lib/site";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -21,7 +37,9 @@ export const Route = createFileRoute("/admin")({
       { name: "robots", content: "noindex, nofollow" },
       { property: "og:title", content: "Admin — Credex" },
       { property: "og:description", content: "Credex website administration." },
+      { property: "og:image", content: OG_IMAGE_URL },
     ],
+    links: [...siteIconLinks],
   }),
   component: AdminPage,
 });
@@ -29,33 +47,64 @@ export const Route = createFileRoute("/admin")({
 /* ---------------- auth shell ---------------- */
 
 function AdminPage() {
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [ready, setReady] = useState(false);
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setSession(s));
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setReady(true); });
-    return () => sub.subscription.unsubscribe();
+    let cancelled = false;
+
+    async function bootstrap() {
+      if (!isAuthenticated()) {
+        if (!cancelled) {
+          setUser(null);
+          setIsAdmin(null);
+          setReady(true);
+        }
+        return;
+      }
+
+      try {
+        const profile = await authApi.profile();
+        await careersApi.listAdmin();
+        if (!cancelled) {
+          setUser(profile);
+          setIsAdmin(true);
+        }
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 403) {
+          if (!cancelled) {
+            setUser(getStoredUser());
+            setIsAdmin(false);
+          }
+        } else {
+          clearAuthSession();
+          if (!cancelled) {
+            setUser(null);
+            setIsAdmin(null);
+          }
+        }
+      } finally {
+        if (!cancelled) setReady(true);
+      }
+    }
+
+    bootstrap();
+    return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    if (!session) { setIsAdmin(null); return; }
-    supabase.rpc("has_role", { _user_id: session.user.id, _role: "admin" }).then(({ data }) => setIsAdmin(!!data));
-  }, [session]);
-
-  if (!ready || (session && isAdmin === null))
+  if (!ready || (user && isAdmin === null))
     return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
-  if (!session) return <Login />;
+  if (!user) return <Login onSignedIn={() => window.location.reload()} />;
   if (!isAdmin)
     return (
       <Centered>
         <h1 className="text-2xl font-semibold">No admin access</h1>
-        <p className="mt-2 text-muted-foreground">You're signed in as {session.user.email}, but this account isn't an administrator.</p>
-        <button className="btn btn-outline mt-6" onClick={() => supabase.auth.signOut()}>Sign out</button>
+        <p className="mt-2 text-muted-foreground">You're signed in as {user.email}, but this account isn't an administrator.</p>
+        <button className="btn btn-outline mt-6" onClick={() => authApi.logout().then(() => window.location.reload())}>Sign out</button>
       </Centered>
     );
-  return <Dashboard email={session.user.email ?? ""} />;
+  return <Dashboard user={user} onProfile={(p) => setUser(p)} />;
 }
 
 function Centered({ children }: { children: ReactNode }) {
@@ -69,7 +118,7 @@ function Centered({ children }: { children: ReactNode }) {
   );
 }
 
-function Login() {
+function Login({ onSignedIn }: { onSignedIn: () => void }) {
   const [mode, setMode] = useState<"in" | "up">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -79,13 +128,15 @@ function Login() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setMsg(null);
-    if (mode === "in") {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) setMsg({ ok: false, text: error.message });
-    } else {
-      const { data, error } = await supabase.auth.signUp({ email, password, options: { emailRedirectTo: `${window.location.origin}/admin` } });
-      if (error) setMsg({ ok: false, text: error.message });
-      else if (!data.session) setMsg({ ok: true, text: "Account created. Check your email to confirm, then sign in." });
+    try {
+      if (mode === "in") {
+        await authApi.login(email, password);
+        onSignedIn();
+      } else {
+        setMsg({ ok: false, text: "Admin accounts are configured on the server. Use sign in with your admin credentials." });
+      }
+    } catch (error) {
+      setMsg({ ok: false, text: apiErrorMessage(error, "Sign in failed") });
     }
     setBusy(false);
   }
@@ -117,7 +168,7 @@ function Login() {
 
 /* ---------------- dashboard ---------------- */
 
-type Tab = "overview" | "settings" | "services" | "jobs" | "applications" | "enquiries" | "expenses" | "vouchers";
+type Tab = "overview" | "settings" | "services" | "jobs" | "applications" | "enquiries" | "expenses" | "expense-categories" | "vouchers";
 const TABS: { id: Tab; label: string; icon: typeof Settings }[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "settings", label: "Site & Contact", icon: Settings },
@@ -126,18 +177,24 @@ const TABS: { id: Tab; label: string; icon: typeof Settings }[] = [
   { id: "applications", label: "Applications", icon: FileText },
   { id: "enquiries", label: "Enquiries", icon: Inbox },
   { id: "expenses", label: "Expenses", icon: Wallet },
+  { id: "expense-categories", label: "Expense Categories", icon: Tags },
   { id: "vouchers", label: "Vouchers", icon: Receipt },
 ];
 
-function Dashboard({ email }: { email: string }) {
+function Dashboard({ user, onProfile }: { user: AuthUser; onProfile: (user: AuthUser) => void }) {
   const [tab, setTab] = useState<Tab>("overview");
-  const [draft, setDraft] = useState<VoucherDraft | null>(null);
+  const [draft, setDraft] = useState<Partial<VoucherDraft> | null>(null);
   const qc = useQueryClient();
   const refreshSite = useCallback(() => qc.invalidateQueries({ queryKey: contentQuery.queryKey }), [qc]);
 
+  useEffect(() => {
+    authApi.profile().then(onProfile).catch(() => undefined);
+  }, [onProfile]);
+
   async function signOut() {
     await qc.cancelQueries();
-    await supabase.auth.signOut();
+    await authApi.logout();
+    window.location.reload();
   }
 
   return (
@@ -145,7 +202,7 @@ function Dashboard({ email }: { email: string }) {
       <aside className="border-b border-border bg-card lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between p-5 lg:block">
           <Link to="/" aria-label="View website"><Logo /></Link>
-          <p className="hidden truncate pt-6 text-xs text-muted-foreground lg:block">{email}</p>
+          <p className="hidden truncate pt-6 text-xs text-muted-foreground lg:block">{user.email}</p>
         </div>
         <nav aria-label="Admin" className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:pb-0">
           {TABS.map((t) => (
@@ -170,7 +227,20 @@ function Dashboard({ email }: { email: string }) {
         {tab === "jobs" && <JobsPanel onSaved={refreshSite} />}
         {tab === "applications" && <ApplicationsPanel />}
         {tab === "enquiries" && <EnquiriesPanel />}
-        {tab === "expenses" && <ExpensesPanel onVoucher={(x) => { setDraft({ expense_id: x.id, payee: x.paid_by, details: `${x.name} (${x.category})${x.notes ? " – " + x.notes : ""}`, amount: String(x.amount) }); setTab("vouchers"); }} />}
+        {tab === "expenses" && <ExpensesPanel onVoucher={(x) => {
+          setDraft({
+            expenseId: x.id,
+            categoryId: x.categoryId,
+            paidBy: x.paidBy,
+            payee: "",
+            title: x.expenseName,
+            description: `${x.expenseName} (${x.category.name})${x.notes ? " – " + x.notes : ""}`,
+            amount: String(x.amount),
+            paymentMode: "BANK_TRANSFER",
+          });
+          setTab("vouchers");
+        }} />}
+        {tab === "expense-categories" && <ExpenseCategoriesPanel />}
         {tab === "vouchers" && <VouchersPanel draft={draft} />}
       </main>
     </div>
@@ -204,17 +274,21 @@ function Toast({ msg }: { msg: { ok: boolean; text: string } | null }) {
   return <p role="status" className={`text-sm font-medium ${msg.ok ? "text-success" : "text-destructive"}`}>{msg.text}</p>;
 }
 
-async function uploadImage(file: File): Promise<string> {
-  const ext = file.name.split(".").pop() ?? "jpg";
-  const path = `images/${crypto.randomUUID()}.${ext}`;
-  const up = await supabase.storage.from("site-media").upload(path, file, { contentType: file.type || "image/jpeg" });
-  if (up.error) throw up.error;
-  const { data, error } = await supabase.storage.from("site-media").createSignedUrl(path, 60 * 60 * 24 * 365 * 10);
-  if (error || !data) throw error ?? new Error("Could not create image link");
-  return data.signedUrl;
-}
-
-function ImageField({ id, label, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
+function ImageField({
+  id,
+  label,
+  value,
+  onChange,
+  onUploadFile,
+  onRemove,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  onUploadFile: (file: File) => Promise<string>;
+  onRemove?: () => void | Promise<void>;
+}) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   return (
@@ -230,11 +304,11 @@ function ImageField({ id, label, value, onChange }: { id: string; label: string;
               onChange={async (e) => {
                 const f = e.target.files?.[0]; if (!f) return;
                 setBusy(true); setErr("");
-                try { onChange(await uploadImage(f)); } catch (x) { setErr(x instanceof Error ? x.message : "Upload failed"); }
+                try { onChange(await onUploadFile(f)); } catch (x) { setErr(apiErrorMessage(x, "Upload failed")); }
                 setBusy(false); e.target.value = "";
               }} />
           </label>
-          {value && <button type="button" onClick={() => onChange("")} className="btn btn-outline h-10 px-4 text-sm">Remove</button>}
+          {value && <button type="button" onClick={async () => { if (onRemove) await onRemove(); else onChange(""); }} className="btn btn-outline h-10 px-4 text-sm">Remove</button>}
         </div>
       </div>
       {err && <p className="mt-2 text-sm text-destructive">{err}</p>}
@@ -250,9 +324,19 @@ function Overview({ go }: { go: (t: Tab) => void }) {
   const [c, setC] = useState({ services: 0, jobs: 0, applications: 0, enquiries: 0 });
   useEffect(() => {
     (async () => {
-      const q = (t: "services" | "jobs" | "job_applications" | "enquiries") => supabase.from(t).select("*", { count: "exact", head: true });
-      const [a, b, d, e] = await Promise.all([q("services"), q("jobs"), q("job_applications"), q("enquiries")]);
-      setC({ services: a.count ?? 0, jobs: b.count ?? 0, applications: d.count ?? 0, enquiries: e.count ?? 0 });
+      const q = (t: "enquiries") => supabase.from(t).select("*", { count: "exact", head: true });
+      const [services, careers, applications, enquiries] = await Promise.all([
+        servicesApi.list(),
+        careersApi.listAdmin(),
+        applicationsApi.list(),
+        q("enquiries"),
+      ]);
+      setC({
+        services: services.length,
+        jobs: careers.length,
+        applications: applications.length,
+        enquiries: enquiries.count ?? 0,
+      });
     })();
   }, []);
   const cards: { label: string; value: number; tab: Tab; icon: typeof Settings }[] = [
@@ -280,28 +364,39 @@ function Overview({ go }: { go: (t: Tab) => void }) {
 /* ---------------- settings ---------------- */
 
 function SettingsPanel({ onSaved }: { onSaved: () => void }) {
-  const [s, setS] = useState<SiteSettings | null>(null);
+  const [s, setS] = useState<SiteSettingsForm | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    supabase.from("site_settings").select("data").eq("id", 1).maybeSingle().then(({ data }) =>
-      setS({ ...DEFAULT_SETTINGS, ...((data?.data as Partial<SiteSettings>) ?? {}) }));
+    siteContactApi.get().then((data) => {
+      const mapped = siteContactToSettings(data);
+      setS({
+        ...DEFAULT_SETTINGS,
+        ...mapped,
+        hero_image_publicId: mapped.hero_image_publicId,
+        about_image_publicId: mapped.about_image_publicId,
+      });
+    }).catch((error) => setMsg({ ok: false, text: apiErrorMessage(error, "Could not load site settings") }));
   }, []);
 
   if (!s) return <Loading />;
-  const set = (k: keyof SiteSettings) => (v: string) => setS({ ...s, [k]: v });
+  const set = (k: keyof SiteSettingsForm) => (v: string) => setS({ ...s, [k]: v });
 
   async function save() {
     setBusy(true); setMsg(null);
-    const { error } = await supabase.from("site_settings").upsert({ id: 1, data: s, updated_at: new Date().toISOString() });
+    try {
+      await siteContactApi.update(settingsToSiteContact(s));
+      setMsg({ ok: true, text: "Site & Contact updated successfully." });
+      onSaved();
+    } catch (error) {
+      setMsg({ ok: false, text: apiErrorMessage(error, "Could not save changes") });
+    }
     setBusy(false);
-    setMsg(error ? { ok: false, text: error.message } : { ok: true, text: "Saved. Your website is updated." });
-    if (!error) onSaved();
   }
 
-  const text = (k: keyof SiteSettings, label: string, type = "text", hint?: string) => (
-    <Lbl id={k} label={label} {...(hint ? { hint } : {})}><input id={k} type={type} className="field" value={s[k]} onChange={(e) => set(k)(e.target.value)} /></Lbl>
+  const text = (k: keyof SiteSettingsForm, label: string, type = "text", hint?: string) => (
+    <Lbl id={k} label={label} {...(hint ? { hint } : {})}><input id={k} type={type} className="field" value={s[k] as string} onChange={(e) => set(k)(e.target.value)} /></Lbl>
   );
 
   return (
@@ -324,8 +419,30 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
           {text("hero_title", "Main headline")}
           <Lbl id="hero_text" label="Supporting text"><textarea id="hero_text" rows={3} className="field h-auto py-3" value={s.hero_text} onChange={(e) => set("hero_text")(e.target.value)} /></Lbl>
           <div className="grid gap-6 md:grid-cols-2">
-            <ImageField id="hero_image" label="Homepage main image" value={s.hero_image} onChange={set("hero_image")} />
-            <ImageField id="about_image" label="About section image" value={s.about_image} onChange={set("about_image")} />
+            <ImageField
+              id="hero_image"
+              label="Homepage main image"
+              value={s.hero_image}
+              onChange={set("hero_image")}
+              onUploadFile={async (file) => {
+                const img = await siteContactApi.uploadImage(file);
+                setS({ ...s, hero_image: img.url, hero_image_publicId: img.publicId });
+                return img.url;
+              }}
+              onRemove={() => setS({ ...s, hero_image: "", hero_image_publicId: "" })}
+            />
+            <ImageField
+              id="about_image"
+              label="About section image"
+              value={s.about_image}
+              onChange={set("about_image")}
+              onUploadFile={async (file) => {
+                const img = await siteContactApi.uploadImage(file);
+                setS({ ...s, about_image: img.url, about_image_publicId: img.publicId });
+                return img.url;
+              }}
+              onRemove={() => setS({ ...s, about_image: "", about_image_publicId: "" })}
+            />
           </div>
         </section>
         <Toast msg={msg} />
@@ -338,23 +455,34 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
 
 function ServicesPanel({ onSaved }: { onSaved: () => void }) {
   const [rows, setRows] = useState<ServiceRow[] | null>(null);
+  const [adding, setAdding] = useState(false);
   const load = useCallback(() => {
-    supabase.from("services").select("*").order("sort").then(({ data }) => setRows(data ?? []));
+    servicesApi.list().then((data) => setRows(data.map(serviceToRow))).catch(() => setRows([]));
   }, []);
   useEffect(load, [load]);
 
   async function add() {
-    const id = `service-${Date.now().toString(36)}`;
-    const sort = (rows?.reduce((m, r) => Math.max(m, r.sort), 0) ?? 0) + 1;
-    await supabase.from("services").insert({ id, title: "New service", sort, published: false });
-    load();
+    setAdding(true);
+    try {
+      const sort = (rows?.reduce((m, r) => Math.max(m, r.sort), 0) ?? 0) + 1;
+      await servicesApi.create({
+        title: "New service",
+        description: "",
+        icon: "Layers",
+        order: sort,
+      });
+      load();
+      onSaved();
+    } finally {
+      setAdding(false);
+    }
   }
 
   if (!rows) return <Loading />;
   return (
     <>
       <PanelHead title="Services" text="Edit service titles, descriptions, icons and images. Lower order numbers appear first."
-        action={<button onClick={add} className="btn btn-primary"><Plus className="h-4 w-4" />Add service</button>} />
+        action={<button onClick={add} disabled={adding} className="btn btn-primary">{adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Add service</button>} />
       <div className="space-y-5">
         {rows.map((r) => <ServiceEditor key={r.id} row={r} onChange={() => { load(); onSaved(); }} />)}
       </div>
@@ -373,18 +501,30 @@ function ServiceEditor({ row, onChange }: { row: ServiceRow; onChange: () => voi
 
   async function save() {
     setBusy(true); setMsg(null);
-    const { error } = await supabase.from("services").update({
-      title: r.title, short: r.short, description: r.description, icon: r.icon, image_url: r.image_url || null,
-      capabilities: lines(caps), benefits: lines(bens), sort: r.sort, published: r.published,
-    }).eq("id", r.id);
+    try {
+      await servicesApi.update(r.id, {
+        title: r.title,
+        description: r.description,
+        icon: r.icon,
+        order: r.sort,
+      });
+      setMsg({ ok: true, text: "Service updated successfully." });
+      onChange();
+    } catch (error) {
+      setMsg({ ok: false, text: apiErrorMessage(error, "Could not save service") });
+    }
     setBusy(false);
-    setMsg(error ? { ok: false, text: error.message } : { ok: true, text: "Saved." });
-    if (!error) onChange();
   }
   async function del() {
     if (!confirm(`Delete "${r.title}"?`)) return;
-    await supabase.from("services").delete().eq("id", r.id);
-    onChange();
+    setBusy(true);
+    try {
+      await servicesApi.delete(r.id);
+      onChange();
+    } catch (error) {
+      setMsg({ ok: false, text: apiErrorMessage(error, "Could not delete service") });
+    }
+    setBusy(false);
   }
 
   return (
@@ -412,7 +552,21 @@ function ServiceEditor({ row, onChange }: { row: ServiceRow; onChange: () => voi
             <Lbl id={`c-${r.id}`} label="Key capabilities" hint="One per line."><textarea id={`c-${r.id}`} rows={5} className="field h-auto py-3" value={caps} onChange={(e) => setCaps(e.target.value)} /></Lbl>
             <Lbl id={`b-${r.id}`} label="Business benefits" hint="One per line."><textarea id={`b-${r.id}`} rows={5} className="field h-auto py-3" value={bens} onChange={(e) => setBens(e.target.value)} /></Lbl>
           </div>
-          <ImageField id={`img-${r.id}`} label="Image" value={r.image_url ?? ""} onChange={(v) => setR({ ...r, image_url: v })} />
+          <ImageField
+            id={`img-${r.id}`}
+            label="Image"
+            value={r.image_url ?? ""}
+            onChange={(v) => setR({ ...r, image_url: v })}
+            onUploadFile={async (file) => {
+              const updated = await servicesApi.uploadImage(r.id, file);
+              setR({ ...r, image_url: updated.image?.url ?? "" });
+              return updated.image?.url ?? "";
+            }}
+            onRemove={async () => {
+              const updated = await servicesApi.deleteImage(r.id);
+              setR({ ...r, image_url: updated.image?.url ?? "" });
+            }}
+          />
           <div className="flex flex-wrap items-center gap-3 border-t border-border pt-5">
             <button onClick={save} disabled={busy} className="btn btn-primary h-10 px-5 text-sm">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save</button>
             <button onClick={() => setR({ ...r, published: !r.published })} className="btn btn-outline h-10 px-4 text-sm">
@@ -431,22 +585,41 @@ function ServiceEditor({ row, onChange }: { row: ServiceRow; onChange: () => voi
 
 function JobsPanel({ onSaved }: { onSaved: () => void }) {
   const [rows, setRows] = useState<JobRow[] | null>(null);
+  const [adding, setAdding] = useState(false);
   const load = useCallback(() => {
-    supabase.from("jobs").select("*").order("sort").then(({ data }) => setRows(data ?? []));
+    careersApi.listAdmin().then((data) => setRows(data.map(careerToJobRow))).catch(() => setRows([]));
   }, []);
   useEffect(load, [load]);
 
   async function add() {
-    const sort = (rows?.reduce((m, r) => Math.max(m, r.sort), 0) ?? 0) + 1;
-    await supabase.from("jobs").insert({ title: "New position", sort, published: false });
-    load();
+    setAdding(true);
+    try {
+      const sort = (rows?.reduce((m, r) => Math.max(m, r.sort), 0) ?? 0) + 1;
+      await careersApi.create({
+        title: "New position",
+        location: "TBD",
+        employmentType: "Full-time",
+        experience: "TBD",
+        workplace: "On-site",
+        salary: "TBD",
+        responsibilities: [],
+        requirements: [],
+        goodToHave: [],
+        order: sort,
+        isVisible: false,
+      });
+      load();
+      onSaved();
+    } finally {
+      setAdding(false);
+    }
   }
 
   if (!rows) return <Loading />;
   return (
     <>
       <PanelHead title="Careers" text="Add, edit, hide or remove job openings shown on the Careers page."
-        action={<button onClick={add} className="btn btn-primary"><Plus className="h-4 w-4" />Add opening</button>} />
+        action={<button onClick={add} disabled={adding} className="btn btn-primary">{adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Add opening</button>} />
       {rows.length === 0 && <p className="text-muted-foreground">No openings yet.</p>}
       <div className="space-y-5">
         {rows.map((r) => <JobEditor key={r.id} row={r} onChange={() => { load(); onSaved(); }} />)}
@@ -459,25 +632,68 @@ function JobEditor({ row, onChange }: { row: JobRow; onChange: () => void }) {
   const [r, setR] = useState(row);
   const [resp, setResp] = useState(row.responsibilities.join("\n"));
   const [reqs, setReqs] = useState(row.requirements.join("\n"));
+  const [good, setGood] = useState(row.good_to_have);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  useEffect(() => {
+    if (!open) return;
+    careersApi.getAdmin(r.id).then((career) => {
+      const mapped = careerToJobRow(career);
+      setR(mapped);
+      setResp(mapped.responsibilities.join("\n"));
+      setReqs(mapped.requirements.join("\n"));
+      setGood(mapped.good_to_have);
+    }).catch((error) => setMsg({ ok: false, text: apiErrorMessage(error, "Could not load career") }));
+  }, [open, r.id]);
+
   async function save() {
     setBusy(true); setMsg(null);
-    const { error } = await supabase.from("jobs").update({
-      title: r.title, location: r.location, employment: r.employment, experience: r.experience, workplace: r.workplace,
-      salary: r.salary, good_to_have: r.good_to_have, responsibilities: lines(resp), requirements: lines(reqs),
-      sort: r.sort, published: r.published,
-    }).eq("id", r.id);
+    try {
+      await careersApi.update(r.id, {
+        title: r.title,
+        location: r.location,
+        employmentType: r.employment,
+        experience: r.experience,
+        workplace: r.workplace,
+        salary: r.salary,
+        responsibilities: lines(resp),
+        requirements: lines(reqs),
+        goodToHave: lines(good),
+        order: r.sort,
+        isVisible: r.published,
+      });
+      setMsg({ ok: true, text: "Career updated successfully." });
+      onChange();
+    } catch (error) {
+      setMsg({ ok: false, text: apiErrorMessage(error, "Could not save career") });
+    }
     setBusy(false);
-    setMsg(error ? { ok: false, text: error.message } : { ok: true, text: "Saved." });
-    if (!error) onChange();
   }
   async function del() {
     if (!confirm(`Delete "${r.title}"?`)) return;
-    await supabase.from("jobs").delete().eq("id", r.id);
-    onChange();
+    setBusy(true);
+    try {
+      await careersApi.delete(r.id);
+      onChange();
+    } catch (error) {
+      setMsg({ ok: false, text: apiErrorMessage(error, "Could not delete career") });
+    }
+    setBusy(false);
+  }
+  async function toggleVisibility() {
+    setBusy(true); setMsg(null);
+    const next = !r.published;
+    try {
+      const updated = await careersApi.updateVisibility(r.id, next);
+      setR({ ...r, published: updated.isVisible });
+      setMsg({ ok: true, text: "Career visibility updated successfully." });
+      onChange();
+    } catch (error) {
+      setMsg({ ok: false, text: apiErrorMessage(error, "Could not update visibility") });
+    }
+    setBusy(false);
   }
   const f = (k: "title" | "location" | "employment" | "experience" | "workplace" | "salary", label: string) => (
     <Lbl id={`${k}-${r.id}`} label={label}><input id={`${k}-${r.id}`} className="field" value={r[k]} onChange={(e) => setR({ ...r, [k]: e.target.value })} /></Lbl>
@@ -508,13 +724,13 @@ function JobEditor({ row, onChange }: { row: JobRow; onChange: () => void }) {
             <Lbl id={`r-${r.id}`} label="Responsibilities" hint="One per line."><textarea id={`r-${r.id}`} rows={7} className="field h-auto py-3" value={resp} onChange={(e) => setResp(e.target.value)} /></Lbl>
             <Lbl id={`q-${r.id}`} label="Requirements" hint="One per line."><textarea id={`q-${r.id}`} rows={7} className="field h-auto py-3" value={reqs} onChange={(e) => setReqs(e.target.value)} /></Lbl>
           </div>
-          <Lbl id={`g-${r.id}`} label="Good to have"><textarea id={`g-${r.id}`} rows={2} className="field h-auto py-3" value={r.good_to_have} onChange={(e) => setR({ ...r, good_to_have: e.target.value })} /></Lbl>
+          <Lbl id={`g-${r.id}`} label="Good to have" hint="One per line."><textarea id={`g-${r.id}`} rows={2} className="field h-auto py-3" value={good} onChange={(e) => setGood(e.target.value)} /></Lbl>
           <div className="flex flex-wrap items-center gap-3 border-t border-border pt-5">
             <button onClick={save} disabled={busy} className="btn btn-primary h-10 px-5 text-sm">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save</button>
-            <button onClick={() => setR({ ...r, published: !r.published })} className="btn btn-outline h-10 px-4 text-sm">
+            <button onClick={toggleVisibility} disabled={busy} className="btn btn-outline h-10 px-4 text-sm">
               {r.published ? <><EyeOff className="h-4 w-4" />Hide from site</> : <><Eye className="h-4 w-4" />Show on site</>}
             </button>
-            <button onClick={del} className="btn btn-outline h-10 px-4 text-sm text-destructive"><Trash2 className="h-4 w-4" />Delete</button>
+            <button onClick={del} disabled={busy} className="btn btn-outline h-10 px-4 text-sm text-destructive"><Trash2 className="h-4 w-4" />Delete</button>
             <Toast msg={msg} />
           </div>
         </div>
@@ -525,53 +741,64 @@ function JobEditor({ row, onChange }: { row: JobRow; onChange: () => void }) {
 
 /* ---------------- inbox panels ---------------- */
 
-type AppRow = { id: string; job_title: string; full_name: string; email: string; phone: string; experience: string; location: string; message: string | null; resume_path: string | null; created_at: string };
 type EnqRow = { id: string; name: string; company: string | null; email: string; phone: string; service: string; message: string; created_at: string };
 
 const fmt = (d: string) => new Date(d).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 
 function ApplicationsPanel() {
-  const [rows, setRows] = useState<AppRow[] | null>(null);
+  const [rows, setRows] = useState<JobApplication[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const load = useCallback(() => {
-    supabase.from("job_applications").select("*").order("created_at", { ascending: false }).then(({ data }) => setRows(data ?? []));
+    setLoadError(null);
+    applicationsApi
+      .list()
+      .then((data) => setRows(data))
+      .catch((error) => {
+        setRows([]);
+        setLoadError(apiErrorMessage(error, "Could not load applications."));
+      });
   }, []);
   useEffect(load, [load]);
 
-  async function resume(path: string) {
-    const { data, error } = await supabase.storage.from("resumes").createSignedUrl(path, 300);
-    if (error || !data) { alert("Could not open resume."); return; }
-    window.open(data.signedUrl, "_blank", "noopener");
-  }
   async function del(id: string) {
     if (!confirm("Delete this application?")) return;
-    await supabase.from("job_applications").delete().eq("id", id);
-    load();
+    try {
+      await applicationsApi.delete(id);
+      load();
+    } catch (error) {
+      alert(apiErrorMessage(error, "Could not delete application."));
+    }
   }
 
   if (!rows) return <Loading />;
   return (
     <>
       <PanelHead title="Applications" text="Job applications submitted through the Careers page." />
-      {rows.length === 0 && <Empty text="No applications yet." />}
+      {loadError && <p role="alert" className="mb-4 text-sm text-destructive">{loadError}</p>}
+      {rows.length === 0 && !loadError && <Empty text="No applications yet." />}
       <div className="space-y-4">
         {rows.map((a) => (
           <article key={a.id} className="card-site p-6">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div>
-                <h2 className="text-lg font-semibold">{a.full_name}</h2>
-                <p className="text-sm text-primary">{a.job_title}</p>
+                <h2 className="text-lg font-semibold">{a.candidate.name}</h2>
+                <p className="text-sm text-primary">{a.career?.title ?? "Role"}</p>
               </div>
-              <p className="text-xs text-muted-foreground">{fmt(a.created_at)}</p>
+              <p className="text-xs text-muted-foreground">{fmt(a.createdAt)}</p>
             </div>
             <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
-              <Info k="Email" v={<a className="text-primary" href={`mailto:${a.email}`}>{a.email}</a>} />
-              <Info k="Phone" v={<a className="text-primary" href={`tel:${a.phone}`}>{a.phone}</a>} />
-              <Info k="Experience" v={`${a.experience} yrs`} />
-              <Info k="Location" v={a.location} />
+              <Info k="Email" v={<a className="text-primary" href={`mailto:${a.candidate.email}`}>{a.candidate.email}</a>} />
+              <Info k="Phone" v={<a className="text-primary" href={`tel:${a.candidate.phone}`}>{a.candidate.phone}</a>} />
+              <Info k="Experience" v={`${a.candidate.experience} yrs`} />
+              <Info k="Location" v={a.candidate.location} />
             </dl>
-            {a.message && <p className="mt-4 whitespace-pre-line rounded-lg bg-surface p-4 text-sm">{a.message}</p>}
+            {a.coverLetter && <p className="mt-4 whitespace-pre-line rounded-lg bg-surface p-4 text-sm">{a.coverLetter}</p>}
             <div className="mt-4 flex gap-2">
-              {a.resume_path && <button onClick={() => resume(a.resume_path!)} className="btn btn-outline h-9 px-4 text-sm"><Download className="h-4 w-4" />Resume</button>}
+              {a.resume?.url && (
+                <a href={a.resume.url} target="_blank" rel="noopener noreferrer" className="btn btn-outline h-9 px-4 text-sm">
+                  <Download className="h-4 w-4" />Resume
+                </a>
+              )}
               <button onClick={() => del(a.id)} className="btn btn-outline h-9 px-4 text-sm text-destructive"><Trash2 className="h-4 w-4" />Delete</button>
             </div>
           </article>

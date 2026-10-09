@@ -15,13 +15,17 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
-import { company, SITE_URL } from "@/lib/site";
+import { company, LOGO_URL, siteIconLinks, SITE_URL } from "@/lib/site";
+import { Logo } from "@/components/site/Logo";
 import { contentQuery } from "@/lib/content";
 
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
+        <div className="mb-8 flex justify-center">
+          <Logo />
+        </div>
         <h1 className="text-7xl font-bold text-foreground">404</h1>
         <h2 className="mt-4 text-xl font-semibold text-foreground">Page not found</h2>
         <p className="mt-2 text-sm text-muted-foreground">
@@ -50,6 +54,9 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
+        <div className="mb-8 flex justify-center">
+          <Logo />
+        </div>
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           This page didn't load
         </h1>
@@ -87,6 +94,8 @@ const orgSchema = {
   email: "hr@credexfin.com",
   telephone: "+91 80785 99537",
   slogan: company.tagline,
+  logo: LOGO_URL,
+  image: LOGO_URL,
   address: { "@type": "PostalAddress", addressLocality: "Irinjalakuda", addressRegion: "Kerala", addressCountry: "IN" },
   identifier: { "@type": "PropertyValue", propertyID: "CIN", value: company.cin },
 };
@@ -102,7 +111,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
+      ...siteIconLinks,
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
       { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Sora:wght@500;600;700&display=swap" },

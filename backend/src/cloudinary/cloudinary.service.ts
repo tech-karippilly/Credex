@@ -11,6 +11,7 @@ export interface CloudinaryUploadResult {
 export interface CloudinaryUploadOptions {
   folder?: string;
   publicId?: string;
+  resourceType?: 'image' | 'raw' | 'auto' | 'video';
 }
 
 @Injectable()
@@ -30,13 +31,42 @@ export class CloudinaryService implements OnModuleInit {
     file: Express.Multer.File,
     options?: CloudinaryUploadOptions,
   ): Promise<CloudinaryUploadResult> {
+    return this.upload(file, {
+      ...options,
+      resourceType: options?.resourceType ?? 'auto',
+    });
+  }
+
+  async uploadDocument(
+    file: Express.Multer.File,
+    options?: CloudinaryUploadOptions,
+  ): Promise<CloudinaryUploadResult> {
+    return this.upload(file, {
+      ...options,
+      resourceType: 'raw',
+    });
+  }
+
+  async deleteAsset(
+    publicId: string,
+    resourceType: 'image' | 'raw' | 'video' | 'auto' = 'image',
+  ): Promise<void> {
+    await cloudinary.uploader.destroy(publicId, {
+      resource_type: resourceType,
+    });
+  }
+
+  private upload(
+    file: Express.Multer.File,
+    options?: CloudinaryUploadOptions,
+  ): Promise<CloudinaryUploadResult> {
     return new Promise((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: options?.folder,
           public_id: options?.publicId,
           overwrite: options?.publicId ? true : undefined,
-          resource_type: 'auto',
+          resource_type: options?.resourceType ?? 'auto',
         },
         (error, result: UploadApiResponse | undefined) => {
           if (error || !result) {
@@ -53,9 +83,5 @@ export class CloudinaryService implements OnModuleInit {
 
       uploadStream.end(file.buffer);
     });
-  }
-
-  async deleteAsset(publicId: string): Promise<void> {
-    await cloudinary.uploader.destroy(publicId);
   }
 }

@@ -72,6 +72,28 @@ The app connects on startup and logs connection status.
 3. Set `RESEND_API_KEY` and `RESEND_FROM_EMAIL` in `.env`.
 4. Use `EmailService.sendEmail()` from `src/email`.
 
+## WhatsApp Cloud API setup (voucher sharing)
+
+Voucher WhatsApp delivery uses the [WhatsApp Business Platform](https://developers.facebook.com/docs/whatsapp/cloud-api/) (Cloud API). Configure these optional variables in `.env`:
+
+| Variable | Description |
+| --- | --- |
+| `WHATSAPP_ACCESS_TOKEN` | Permanent or system user access token from Meta |
+| `WHATSAPP_PHONE_NUMBER_ID` | Phone number ID from WhatsApp Manager |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | Optional; used for setup reference |
+| `WHATSAPP_API_VERSION` | Graph API version (default `v21.0`) |
+| `WHATSAPP_VOUCHER_TEMPLATE_NAME` | Optional approved template name for business-initiated messages |
+| `WHATSAPP_VOUCHER_TEMPLATE_LANGUAGE` | Template language code (default `en`) |
+
+Without `WHATSAPP_ACCESS_TOKEN` and `WHATSAPP_PHONE_NUMBER_ID`, `POST /api/v1/vouchers/:id/send-whatsapp` returns `503` with a configuration message.
+
+For recipients outside the 24-hour messaging window, create and approve a utility template in Meta Business Manager and set `WHATSAPP_VOUCHER_TEMPLATE_NAME` (body should include a `{{1}}` placeholder for the voucher summary text).
+
+Admin endpoints:
+
+- `POST /api/v1/vouchers/:id/send-email` — body: `{ "email", "message?" }`
+- `POST /api/v1/vouchers/:id/send-whatsapp` — body: `{ "phone", "message?" }`
+
 ## Gemini setup
 
 1. Create an API key in [Google AI Studio](https://aistudio.google.com/).

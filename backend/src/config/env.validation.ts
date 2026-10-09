@@ -54,4 +54,10 @@ export const envValidationSchema = Joi.object({
   GEMINI_MODEL: Joi.string().required().messages({
     'any.required': 'GEMINI_MODEL is required',
   }),
+  WHATSAPP_ACCESS_TOKEN: Joi.string().optional().allow(''),
+  WHATSAPP_PHONE_NUMBER_ID: Joi.string().optional().allow(''),
+  WHATSAPP_BUSINESS_ACCOUNT_ID: Joi.string().optional().allow(''),
+  WHATSAPP_API_VERSION: Joi.string().default('v21.0'),
+  WHATSAPP_VOUCHER_TEMPLATE_NAME: Joi.string().optional().allow(''),
+  WHATSAPP_VOUCHER_TEMPLATE_LANGUAGE: Joi.string().default('en'),
 }).options({ abortEarly: false });
