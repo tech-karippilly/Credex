@@ -57,18 +57,46 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   about_image: "",
 };
 
+class ApiUnreachableError extends Error {
+  constructor(message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = "ApiUnreachableError";
+  }
+}
+
 async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${getApiBaseUrl()}${path}`, {
-    headers: { Accept: "application/json" },
-  });
-  const body = (await res.json()) as ApiSuccessResponse<T> | { success: false; message: string };
+  const url = `${getApiBaseUrl()}${path}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { Accept: "application/json" },
+    });
+  } catch (error) {
+    throw new ApiUnreachableError(`Backend API unreachable at ${url}`, { cause: error });
+  }
+
+  const text = await res.text();
+  if (!text.trim()) {
+    throw new ApiUnreachableError(`Empty response from ${url} (HTTP ${res.status})`);
+  }
+
+  let body: ApiSuccessResponse<T> | { success: false; message: string };
+  try {
+    body = JSON.parse(text) as ApiSuccessResponse<T> | { success: false; message: string };
+  } catch (error) {
+    throw new ApiUnreachableError(`Non-JSON response from ${url} (HTTP ${res.status})`, {
+      cause: error,
+    });
+  }
+
   if (!res.ok || !body.success) {
-    throw new Error("message" in body ? body.message : "Failed to load site content");
+    throw new Error("message" in body && body.message ? body.message : "Failed to load site content");
   }
   return body.data;
 }
 
 function isApiUnreachable(error: unknown): boolean {
+  if (error instanceof ApiUnreachableError) return true;
   if (!(error instanceof Error)) return false;
   if (error.message === "fetch failed") return true;
   const cause = error.cause;
@@ -111,8 +139,9 @@ export const getSiteContent = createServerFn({ method: "GET" }).handler(async ()
     };
   } catch (error) {
     if (isApiUnreachable(error)) {
+      const reason = error instanceof Error ? error.message : "unknown error";
       console.warn(
-        `[getSiteContent] Backend API unreachable at ${getApiBaseUrl()}; using defaults. Start the backend (npm run start:dev in /backend).`,
+        `[getSiteContent] ${reason}. Using defaults. Start the backend (npm run start:dev in /backend).`,
       );
       return EMPTY_SITE_CONTENT;
     }
