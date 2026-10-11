@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isValidObjectId, Model, Types } from 'mongoose';
+import { mapLegacyPermissionCodes } from './catalog/legacy-permission-map';
 import { Permission, PermissionDocument } from './schemas/permission.schema';
 import {
   RolePermission,
@@ -26,15 +27,21 @@ export class RolePermissionsService {
   async listKeys(roleId: string): Promise<string[]> {
     const permissionIds = await this.permissionIdsForRole(roleId);
     if (permissionIds.length === 0) {
-      return [];
+      return this.legacyKeysForRole(roleId);
     }
 
     const permissions = await this.permissionModel
       .find({ _id: { $in: permissionIds } })
       .select('key')
       .exec();
+    const keys = permissions
+      .map((permission) => permission.key)
+      .filter((key): key is string => Boolean(key));
+    if (keys.length > 0) {
+      return keys.sort();
+    }
 
-    return permissions.map((permission) => permission.key).sort();
+    return this.legacyKeysForRole(roleId);
   }
 
   async assertKeysExist(keys: readonly string[]): Promise<void> {
@@ -161,7 +168,30 @@ export class RolePermissionsService {
       ])
       .exec();
 
-    return new Map(rows.map((row) => [String(row._id), row.count]));
+    const counts = new Map(rows.map((row) => [String(row._id), row.count]));
+    const legacyRoles = await this.rolePermissionModel.db
+      .collection('roles')
+      .find({})
+      .project({ permissions: 1 })
+      .toArray();
+    for (const role of legacyRoles) {
+      const roleId = String(role._id);
+      if ((counts.get(roleId) ?? 0) > 0) {
+        continue;
+      }
+
+      const codes = Array.isArray(role.permissions)
+        ? role.permissions.filter(
+            (code): code is string => typeof code === 'string',
+          )
+        : [];
+      const keyCount = mapLegacyPermissionCodes(codes).length;
+      if (keyCount > 0) {
+        counts.set(roleId, keyCount);
+      }
+    }
+
+    return counts;
   }
 
   async removeAllForRole(roleId: string): Promise<void> {
@@ -194,6 +224,25 @@ export class RolePermissionsService {
     if (!deleted) {
       throw new NotFoundException('Role permission not found');
     }
+  }
+
+  private async legacyKeysForRole(roleId: string): Promise<string[]> {
+    if (!isValidObjectId(roleId)) {
+      return [];
+    }
+
+    const role = await this.rolePermissionModel.db
+      .collection('roles')
+      .findOne(
+        { _id: new Types.ObjectId(roleId) },
+        { projection: { permissions: 1 } },
+      );
+    const codes = Array.isArray(role?.permissions)
+      ? role.permissions.filter(
+          (code): code is string => typeof code === 'string',
+        )
+      : [];
+    return mapLegacyPermissionCodes(codes);
   }
 
   private async permissionIdsForRole(roleId: string) {

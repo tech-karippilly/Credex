@@ -9,6 +9,7 @@ import {
   isUserActive,
   isUserSuperAdmin,
 } from '../users/utils/user-account.util';
+import { mapLegacyPermissionCodes } from './catalog/legacy-permission-map';
 import { Permission, PermissionDocument } from './schemas/permission.schema';
 import { Role, RoleDocument } from './schemas/role.schema';
 import {
@@ -79,19 +80,68 @@ export class EffectivePermissionsService {
         roleId: { $in: roleIds.flatMap((roleId) => this.idVariants(roleId)) },
       })
       .exec();
-    const permissionIds = links.map((link) => link.permissionId);
-    if (permissionIds.length === 0) {
-      return { superAdmin: false, permissions: new Set() };
+    const linkedPermissionIds = new Map<
+      string,
+      Array<Types.ObjectId | string>
+    >();
+    for (const link of links) {
+      const roleId = String(link.roleId);
+      const current = linkedPermissionIds.get(roleId) ?? [];
+      current.push(link.permissionId);
+      linkedPermissionIds.set(roleId, current);
     }
 
-    const permissions = await this.permissionModel
-      .find({ _id: { $in: permissionIds } })
-      .select('key')
-      .exec();
+    const permissionIds = [...linkedPermissionIds.values()].flat();
+    const permissions =
+      permissionIds.length === 0
+        ? []
+        : await this.permissionModel
+            .find({ _id: { $in: permissionIds } })
+            .select('key')
+            .exec();
+    const keyByPermissionId = new Map(
+      permissions
+        .filter((permission) => Boolean(permission.key))
+        .map((permission) => [String(permission._id), permission.key]),
+    );
+
+    const keys = new Set<string>();
+    const rolesWithoutLinks: Types.ObjectId[] = [];
+    for (const roleId of roleIds) {
+      const linked = linkedPermissionIds.get(String(roleId));
+      if (!linked || linked.length === 0) {
+        rolesWithoutLinks.push(roleId);
+        continue;
+      }
+
+      for (const permissionId of linked) {
+        const key = keyByPermissionId.get(String(permissionId));
+        if (key) {
+          keys.add(key);
+        }
+      }
+    }
+
+    if (rolesWithoutLinks.length > 0) {
+      const legacyRoles = await this.roleModel.collection
+        .find({ _id: { $in: rolesWithoutLinks } })
+        .project({ permissions: 1 })
+        .toArray();
+      for (const role of legacyRoles) {
+        const codes = Array.isArray(role.permissions)
+          ? role.permissions.filter(
+              (code): code is string => typeof code === 'string',
+            )
+          : [];
+        for (const key of mapLegacyPermissionCodes(codes)) {
+          keys.add(key);
+        }
+      }
+    }
 
     return {
       superAdmin: false,
-      permissions: new Set(permissions.map((permission) => permission.key)),
+      permissions: keys,
     };
   }
 

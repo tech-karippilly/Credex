@@ -41,7 +41,7 @@ export class PermissionsService {
 
   async list() {
     return this.permissionModel
-      .find()
+      .find({ key: { $type: 'string', $ne: '' } })
       .select('key module action description systemManaged')
       .sort({ module: 1, action: 1 })
       .exec();
@@ -49,7 +49,7 @@ export class PermissionsService {
 
   async listKeys(): Promise<string[]> {
     const permissions = await this.permissionModel
-      .find()
+      .find({ key: { $type: 'string', $ne: '' } })
       .select('key')
       .sort({ key: 1 })
       .exec();
