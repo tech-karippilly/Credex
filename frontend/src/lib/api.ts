@@ -16,13 +16,42 @@ export class ApiError extends Error {
   }
 }
 
-export function getApiBaseUrl(): string {
+/** Nest API on this machine. Backend `PORT` is 1000. */
+const LOCAL_API_BASE_URL = "http://127.0.0.1:1000/api/v1";
+
+function configuredApiBaseUrl(): string | undefined {
   const fromVite = import.meta.env.VITE_API_BASE_URL as string | undefined;
-  if (fromVite) return fromVite.replace(/\/$/, "");
+  if (typeof fromVite === "string" && fromVite.trim()) return fromVite.trim().replace(/\/$/, "");
   if (typeof process !== "undefined" && process.env.API_BASE_URL) {
     return process.env.API_BASE_URL.replace(/\/$/, "");
   }
-  return "http://localhost:3000/api/v1";
+  return undefined;
+}
+
+function isQuickTunnel(url: string): boolean {
+  try {
+    return new URL(url).hostname.endsWith(".trycloudflare.com");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Browser calls from https://credexfin.com use the local API when the baked
+ * base URL is a Cloudflare quick tunnel. Those hostnames expire, and the live
+ * one is a different backend than the API on port 1000.
+ */
+export function resolveApiBaseUrl(configured: string | undefined, pageHostname?: string): string {
+  if (configured && pageHostname && isQuickTunnel(configured)) {
+    return LOCAL_API_BASE_URL;
+  }
+  return configured ?? "http://localhost:3000/api/v1";
+}
+
+export function getApiBaseUrl(): string {
+  const pageHostname =
+    typeof window !== "undefined" && import.meta.env.DEV ? window.location.hostname : undefined;
+  return resolveApiBaseUrl(configuredApiBaseUrl(), pageHostname);
 }
 
 let refreshPromise: Promise<boolean> | null = null;
