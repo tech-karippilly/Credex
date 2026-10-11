@@ -201,6 +201,11 @@ async function loadSiteContent() {
       );
     }
 
+    if (!import.meta.env.DEV) {
+      throw new Error(
+        `Backend API unreachable (${failures.map((failure) => failure.path).join(", ")}).`,
+      );
+    }
     console.warn(
       `[getSiteContent] Backend API unreachable (${failures.map((failure) => failure.path).join(", ")}). Using defaults. Start the backend (npm run start:dev in /backend).`,
     );
@@ -236,8 +241,8 @@ async function loadSiteContent() {
       hero_image: settings.hero_image,
       about_image: settings.about_image,
     },
-    services: services.value.map(serviceToRow),
-    jobs: careers.value.map(careerToJobRow),
+    services: services.value.map(serviceToRow).filter((row) => row.published),
+    jobs: careers.value.map(careerToJobRow).filter((row) => row.published),
   };
 }
 

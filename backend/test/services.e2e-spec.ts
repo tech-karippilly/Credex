@@ -112,8 +112,12 @@ describe('Services (e2e)', () => {
     payload: {
       title: string;
       description: string;
+      short?: string;
       icon?: string;
+      capabilities?: string[];
+      benefits?: string[];
       order: number;
+      isVisible?: boolean;
     },
   ) {
     const response = await request(app.getHttpServer())
@@ -157,6 +161,42 @@ describe('Services (e2e)', () => {
       });
     });
 
+    it('omits unpublished services from the public list and returns them to admins', async () => {
+      const adminToken = await loginAsAdmin();
+      const hidden = await createService(adminToken, {
+        title: 'Hidden',
+        description: 'Not on the website',
+        order: 1,
+        isVisible: false,
+      });
+      await createService(adminToken, {
+        title: 'Shown',
+        description: 'On the website',
+        order: 2,
+        isVisible: true,
+      });
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/services')
+        .expect(200);
+
+      expect(response.body.data.map((service: { title: string }) => service.title)).toEqual([
+        'Shown',
+      ]);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/services/${hidden.id}`)
+        .expect(404);
+
+      const admin = await request(app.getHttpServer())
+        .get('/api/v1/services/admin')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(admin.body.data).toHaveLength(2);
+      expect(admin.body.data[0].isVisible).toBe(false);
+    });
+
     it('returns an empty array when no services exist', async () => {
       const response = await request(app.getHttpServer())
         .get('/api/v1/services')
@@ -184,10 +224,14 @@ describe('Services (e2e)', () => {
       expect(response.body.data).toEqual({
         id: created.id,
         title: 'Consulting',
+        short: '',
         description: 'IT consulting services',
         icon: 'briefcase',
+        capabilities: [],
+        benefits: [],
         image: null,
         order: 3,
+        isVisible: true,
       });
     });
 
@@ -278,6 +322,16 @@ describe('Services (e2e)', () => {
         .post('/api/v1/services')
         .set('Authorization', `Bearer ${adminToken}`)
         .send({
+          title: 'Blank description',
+          description: '   ',
+          order: 1,
+        })
+        .expect(400);
+
+      await request(app.getHttpServer())
+        .post('/api/v1/services')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
           title: 'Invalid order',
           description: 'Bad order',
           order: 0,
@@ -324,6 +378,34 @@ describe('Services (e2e)', () => {
         icon: 'code',
         order: 1,
       });
+    });
+
+    it('persists visibility without removing the service', async () => {
+      const adminToken = await loginAsAdmin();
+      const created = await createService(adminToken, {
+        title: 'Toggle',
+        description: 'Visible at first',
+        order: 1,
+      });
+
+      const hidden = await request(app.getHttpServer())
+        .put(`/api/v1/services/${created.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isVisible: false })
+        .expect(200);
+
+      expect(hidden.body.data.isVisible).toBe(false);
+      const publicList = await request(app.getHttpServer())
+        .get('/api/v1/services')
+        .expect(200);
+      expect(publicList.body.data).toEqual([]);
+
+      const shown = await request(app.getHttpServer())
+        .put(`/api/v1/services/${created.id}`)
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({ isVisible: true })
+        .expect(200);
+      expect(shown.body.data.isVisible).toBe(true);
     });
 
     it('returns 404 when service is missing', async () => {

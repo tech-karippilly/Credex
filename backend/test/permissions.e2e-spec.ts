@@ -117,6 +117,8 @@ describe('Permission enforcement (e2e)', () => {
     await request(app.getHttpServer()).get('/api/v1/expenses').expect(401);
     await request(app.getHttpServer()).get('/api/v1/careers/admin').expect(401);
     await request(app.getHttpServer()).get('/api/v1/applications').expect(401);
+    await request(app.getHttpServer()).get('/api/v1/enquiries').expect(401);
+    await request(app.getHttpServer()).get('/api/v1/services/admin').expect(401);
   });
 
   it('returns 403 when a signed-in user has no matching persisted permission', async () => {
@@ -142,6 +144,18 @@ describe('Permission enforcement (e2e)', () => {
       .expect(403);
     await request(app.getHttpServer())
       .get('/api/v1/vouchers')
+      .set(auth)
+      .expect(403);
+    await request(app.getHttpServer())
+      .get('/api/v1/enquiries')
+      .set(auth)
+      .expect(403);
+    await request(app.getHttpServer())
+      .delete('/api/v1/enquiries/5b1b1b1b-1b1b-4b1b-8b1b-1b1b1b1b1b1b')
+      .set(auth)
+      .expect(403);
+    await request(app.getHttpServer())
+      .get('/api/v1/services/admin')
       .set(auth)
       .expect(403);
     await request(app.getHttpServer())

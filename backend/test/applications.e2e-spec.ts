@@ -279,6 +279,36 @@ describe('Applications (e2e)', () => {
       expect(JSON.stringify(stored)).not.toContain('%PDF-1.4');
     });
 
+    it('keeps the application when resume upload fails', async () => {
+      const adminToken = await loginAsAdmin();
+      const career = await createCareer(adminToken);
+      const created = await submitApplication(career.id).expect(201);
+      cloudinaryService.uploadDocument.mockRejectedValueOnce(new Error('upload failed'));
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/applications/${created.body.data.id}/resume`)
+        .attach('resume', Buffer.from('%PDF-1.4'), {
+          filename: 'john-doe.pdf',
+          contentType: 'application/pdf',
+        })
+        .expect(500);
+
+      const listed = await request(app.getHttpServer())
+        .get('/api/v1/applications')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(listed.body.data).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: created.body.data.id,
+            status: 'NEW',
+            resume: null,
+          }),
+        ]),
+      );
+    });
+
     it('rejects executables and oversized files', async () => {
       const adminToken = await loginAsAdmin();
       const career = await createCareer(adminToken);

@@ -16,6 +16,7 @@ import { ExpensesModule } from './expenses/expenses.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ReportsModule } from './reports/reports.module';
 import { VouchersModule } from './vouchers/vouchers.module';
+import { EnquiriesModule } from './enquiries/enquiries.module';
 import { SiteContactModule } from './site-contact/site-contact.module';
 import { RbacModule } from './rbac/rbac.module';
 import { UsersModule } from './users/users.module';
@@ -39,6 +40,7 @@ import { UsersModule } from './users/users.module';
     CareersModule,
     ApplicationsModule,
     SiteContactModule,
+    EnquiriesModule,
     ExpenseCategoriesModule,
     ExpensesModule,
     VouchersModule,

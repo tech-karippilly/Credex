@@ -1,31 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { resolveApiBaseUrl } from "./api";
+import { ApiConfigError, resolveApiBaseUrl } from "./api";
+
+const tunnel = "https://example.trycloudflare.com/api/v1";
+const local = "http://127.0.0.1:1000/api/v1";
+const publicApi = "https://api.credexfin.com/api/v1";
 
 describe("resolveApiBaseUrl", () => {
-  it("sends browser calls to the local API when the baked URL is a quick tunnel", () => {
-    expect(
-      resolveApiBaseUrl(
-        "https://souls-carter-contacted-vol.trycloudflare.com/api/v1",
-        "credexfin.com",
-      ),
-    ).toBe("http://127.0.0.1:1000/api/v1");
+  it("uses the same configured URL in the browser and during server rendering", () => {
+    expect(resolveApiBaseUrl(publicApi, { dev: false, pageHostname: "credexfin.com" })).toBe(publicApi);
+    expect(resolveApiBaseUrl(publicApi, { dev: false })).toBe(publicApi);
+    expect(resolveApiBaseUrl(tunnel, { dev: true, pageHostname: "credexfin.com" })).toBe(tunnel);
+    expect(resolveApiBaseUrl(tunnel, { dev: true })).toBe(tunnel);
   });
 
-  it("keeps a loopback API URL", () => {
-    expect(resolveApiBaseUrl("http://localhost:1000/api/v1", "localhost")).toBe(
-      "http://localhost:1000/api/v1",
-    );
+  it("keeps a loopback API URL for local development", () => {
+    expect(resolveApiBaseUrl(local, { dev: true, pageHostname: "localhost" })).toBe(local);
+    expect(resolveApiBaseUrl(local, { dev: true })).toBe(local);
+    expect(resolveApiBaseUrl(undefined, { dev: true, pageHostname: "127.0.0.1" })).toBe(local);
   });
 
-  it("keeps a stable public API URL", () => {
-    expect(resolveApiBaseUrl("https://api.credexfin.com/api/v1", "credexfin.com")).toBe(
-      "https://api.credexfin.com/api/v1",
-    );
+  it("does not send a public page to the visitor's localhost", () => {
+    expect(() => resolveApiBaseUrl(local, { dev: true, pageHostname: "credexfin.com" })).toThrow(ApiConfigError);
+    expect(() => resolveApiBaseUrl(tunnel, { dev: true, pageHostname: "credexfin.com" })).not.toThrow();
   });
 
-  it("leaves server-side calls on the configured URL", () => {
-    expect(
-      resolveApiBaseUrl("https://souls-carter-contacted-vol.trycloudflare.com/api/v1"),
-    ).toBe("https://souls-carter-contacted-vol.trycloudflare.com/api/v1");
+  it("rejects a loopback API URL in production", () => {
+    expect(() => resolveApiBaseUrl(local, { dev: false })).toThrow(ApiConfigError);
+    expect(() => resolveApiBaseUrl(undefined, { dev: false, pageHostname: "credexfin.com" })).toThrow(ApiConfigError);
   });
 });

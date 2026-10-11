@@ -42,4 +42,8 @@ export default () => ({
     apiKey: process.env.GEMINI_API_KEY,
     model: process.env.GEMINI_MODEL,
   },
+  supabase: {
+    url: process.env.SUPABASE_URL,
+    serviceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
+  },
 });

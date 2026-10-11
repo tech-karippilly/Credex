@@ -60,4 +60,6 @@ export const envValidationSchema = Joi.object({
   WHATSAPP_API_VERSION: Joi.string().default('v21.0'),
   WHATSAPP_VOUCHER_TEMPLATE_NAME: Joi.string().optional().allow(''),
   WHATSAPP_VOUCHER_TEMPLATE_LANGUAGE: Joi.string().default('en'),
+  SUPABASE_URL: Joi.string().uri().optional().allow(''),
+  SUPABASE_SERVICE_ROLE_KEY: Joi.string().optional().allow(''),
 }).options({ abortEarly: false });

@@ -51,8 +51,10 @@ export function settingsToSiteContact(form: SiteSettingsForm): SiteContact {
 
 export function serviceToRow(service: Service): ServiceRow {
   const description = service.description ?? "";
+  const storedShort = service.short?.trim() ?? "";
   const short =
-    description.length > 160 ? `${description.slice(0, 157).trimEnd()}…` : description;
+    storedShort ||
+    (description.length > 160 ? `${description.slice(0, 157).trimEnd()}…` : description);
 
   return {
     id: service.id,
@@ -61,10 +63,10 @@ export function serviceToRow(service: Service): ServiceRow {
     description,
     icon: service.icon ?? "Layers",
     image_url: service.image?.url ?? null,
-    capabilities: [],
-    benefits: [],
+    capabilities: service.capabilities ?? [],
+    benefits: service.benefits ?? [],
     sort: service.order,
-    published: true,
+    published: service.isVisible !== false,
   };
 }
 

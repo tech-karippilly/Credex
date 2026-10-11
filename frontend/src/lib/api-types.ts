@@ -51,10 +51,14 @@ export interface SiteContact {
 export interface Service {
   id: string;
   title: string;
+  short?: string;
   description: string;
   icon?: string;
+  capabilities?: string[];
+  benefits?: string[];
   image: SiteContactImage | null;
   order: number;
+  isVisible?: boolean;
 }
 
 export interface Career {

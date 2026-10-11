@@ -27,6 +27,32 @@ const SERVICE_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 export class ServicesController {
   constructor(private readonly servicesService: ServicesService) {}
 
+  @Get('admin')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('services.read')
+  async findAllAdmin() {
+    const data = await this.servicesService.findAllAdmin();
+
+    return {
+      success: true,
+      message: 'Services fetched successfully',
+      data,
+    };
+  }
+
+  @Get('admin/:id')
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('services.read')
+  async findOneAdmin(@Param('id') id: string) {
+    const data = await this.servicesService.findOneAdmin(id);
+
+    return {
+      success: true,
+      message: 'Service fetched successfully',
+      data,
+    };
+  }
+
   @Get()
   async findAll() {
     const data = await this.servicesService.findAll();

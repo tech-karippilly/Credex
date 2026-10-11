@@ -10,7 +10,6 @@ import { AdminAccessProvider, useCan } from "@/components/admin/admin-access";
 import { ExpenseCategoriesPanel } from "@/components/admin/expense-categories";
 import { RolesPanel } from "@/components/admin/roles-panel";
 import { UsersPanel } from "@/components/admin/users-panel";
-import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/site/Logo";
 import { PasswordInput } from "@/components/ui/password-input";
 import { ExpensesPanel, VouchersPanel, type VoucherDraft } from "@/components/admin/finance";
@@ -25,6 +24,7 @@ import type { AuthUser } from "@/lib/api-types";
 import { siteContactApi } from "@/lib/site-contact-api";
 import { servicesApi } from "@/lib/services-api";
 import { applicationsApi, type JobApplication } from "@/lib/applications-api";
+import { enquiriesApi, type Enquiry } from "@/lib/enquiries-api";
 import { careersApi } from "@/lib/careers-api";
 import {
   careerToJobRow,
@@ -418,23 +418,28 @@ const lines = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
 /* ---------------- overview ---------------- */
 
 function Overview({ go, access }: { go: (t: Tab) => void; access: AdminAccess }) {
-  const [c, setC] = useState({ services: 0, jobs: 0, applications: 0, enquiries: 0 });
+  const [c, setC] = useState<{ services: number | null; jobs: number | null; applications: number | null; enquiries: number | null }>({ services: null, jobs: null, applications: null, enquiries: null });
+  const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const services = canSeeAdminTab(access, "services") ? await servicesApi.list().catch(() => []) : [];
-      const careers = canSeeAdminTab(access, "jobs") ? await careersApi.listAdmin().catch(() => []) : [];
-      const applications = canSeeAdminTab(access, "applications") ? await applicationsApi.list().catch(() => []) : [];
-      const enquiries = canSeeAdminTab(access, "enquiries")
-        ? await supabase.from("enquiries").select("*", { count: "exact", head: true })
-        : { count: 0 };
+      const problems: string[] = [];
+      async function count(label: string, allowed: boolean, load: () => Promise<{ length: number }>) {
+        if (!allowed) return 0;
+        try {
+          return (await load()).length;
+        } catch (error) {
+          problems.push(`${label}: ${apiErrorMessage(error, "Could not load")}`);
+          return null;
+        }
+      }
+      const services = await count("Services", canSeeAdminTab(access, "services"), () => servicesApi.listAdmin());
+      const jobs = await count("Careers", canSeeAdminTab(access, "jobs"), () => careersApi.listAdmin());
+      const applications = await count("Applications", canSeeAdminTab(access, "applications"), () => applicationsApi.list());
+      const enquiries = await count("Enquiries", canSeeAdminTab(access, "enquiries"), () => enquiriesApi.list());
       if (!cancelled) {
-        setC({
-          services: services.length,
-          jobs: careers.length,
-          applications: applications.length,
-          enquiries: enquiries.count ?? 0,
-        });
+        setC({ services, jobs, applications, enquiries });
+        setNotice(problems.length > 0 ? problems.join(" ") : null);
       }
     })();
     return () => { cancelled = true; };
@@ -450,11 +455,12 @@ function Overview({ go, access }: { go: (t: Tab) => void; access: AdminAccess })
   return (
     <>
       <PanelHead title="Dashboard" text="Manage your website content, careers and incoming enquiries." />
+      {notice && <p role="alert" className="mb-4 text-sm text-destructive">{notice}</p>}
       <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {cards.map((k) => (
           <button key={k.label} onClick={() => go(k.tab)} className="card-site card-hover p-6 text-left">
             <k.icon className="h-5 w-5 text-primary" />
-            <p className="mt-5 font-display text-4xl font-semibold">{k.value}</p>
+            <p className="mt-5 font-display text-4xl font-semibold">{k.value === null ? "—" : k.value}</p>
             <p className="mt-1 text-sm text-muted-foreground">{k.label}</p>
           </button>
         ))}
@@ -561,24 +567,47 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
 function ServicesPanel({ onSaved }: { onSaved: () => void }) {
   const can = useCan();
   const [rows, setRows] = useState<ServiceRow[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const [composer, setComposer] = useState(false);
+  const [draft, setDraft] = useState({ title: "", description: "", show: true });
+  const [addError, setAddError] = useState<string | null>(null);
   const load = useCallback(() => {
-    servicesApi.list().then((data) => setRows(data.map(serviceToRow))).catch(() => setRows([]));
+    setLoadError(null);
+    servicesApi.listAdmin()
+      .then((data) => setRows(data.map(serviceToRow)))
+      .catch((error) => {
+        setRows([]);
+        setLoadError(apiErrorMessage(error, "Could not load services"));
+      });
   }, []);
   useEffect(load, [load]);
 
-  async function add() {
+  async function add(e: React.FormEvent) {
+    e.preventDefault();
+    const title = draft.title.trim();
+    const description = draft.description.trim();
+    if (!title || !description) {
+      setAddError("Title and description are required.");
+      return;
+    }
     setAdding(true);
+    setAddError(null);
     try {
       const sort = (rows?.reduce((m, r) => Math.max(m, r.sort), 0) ?? 0) + 1;
       await servicesApi.create({
-        title: "New service",
-        description: "",
+        title,
+        description,
         icon: "Layers",
         order: sort,
+        isVisible: draft.show,
       });
+      setDraft({ title: "", description: "", show: true });
+      setComposer(false);
       load();
       onSaved();
+    } catch (error) {
+      setAddError(apiErrorMessage(error, "Could not add service"));
     } finally {
       setAdding(false);
     }
@@ -587,8 +616,22 @@ function ServicesPanel({ onSaved }: { onSaved: () => void }) {
   if (!rows) return <Loading />;
   return (
     <>
-      <PanelHead title="Services" text="Edit service titles, descriptions, icons and images. Lower order numbers appear first."
-        action={can("services.create") ? <button onClick={add} disabled={adding} className="btn btn-primary">{adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Add service</button> : undefined} />
+      <PanelHead title="Services" text="Edit service titles, descriptions, icons and images. Lower order numbers appear first. Hidden services stay off the public website."
+        action={can("services.create") ? <button type="button" onClick={() => { setComposer((open) => !open); setAddError(null); }} className="btn btn-primary"><Plus className="h-4 w-4" />Add service</button> : undefined} />
+      {loadError && <p role="alert" className="mb-4 text-sm text-destructive">{loadError}</p>}
+      {composer && can("services.create") && (
+        <form onSubmit={add} className="card-site mb-5 space-y-4 p-5">
+          <Lbl id="new-service-title" label="Title"><input id="new-service-title" className="field" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} required /></Lbl>
+          <Lbl id="new-service-description" label="Description"><textarea id="new-service-description" rows={3} className="field h-auto py-3" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} required /></Lbl>
+          <label className="flex items-center gap-2 text-sm font-medium">
+            <input type="checkbox" checked={draft.show} onChange={(e) => setDraft({ ...draft, show: e.target.checked })} />
+            Show on website
+          </label>
+          {addError && <p role="alert" className="text-sm text-destructive">{addError}</p>}
+          <button className="btn btn-primary" disabled={adding}>{adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Save service</button>
+        </form>
+      )}
+      {rows.length === 0 && !loadError && <p className="text-muted-foreground">No services yet.</p>}
       <div className="space-y-5">
         {rows.map((r) => <ServiceEditor key={r.id} row={r} onChange={() => { load(); onSaved(); }} />)}
       </div>
@@ -610,15 +653,33 @@ function ServiceEditor({ row, onChange }: { row: ServiceRow; onChange: () => voi
     setBusy(true); setMsg(null);
     try {
       await servicesApi.update(r.id, {
-        title: r.title,
-        description: r.description,
+        title: r.title.trim(),
+        short: r.short.trim(),
+        description: r.description.trim(),
         icon: r.icon,
+        capabilities: lines(caps),
+        benefits: lines(bens),
         order: r.sort,
+        isVisible: r.published,
       });
       setMsg({ ok: true, text: "Service updated successfully." });
       onChange();
     } catch (error) {
       setMsg({ ok: false, text: apiErrorMessage(error, "Could not save service") });
+    }
+    setBusy(false);
+  }
+  async function toggleVisibility() {
+    setBusy(true);
+    setMsg(null);
+    const next = !r.published;
+    try {
+      await servicesApi.update(r.id, { isVisible: next });
+      setR({ ...r, published: next });
+      setMsg({ ok: true, text: next ? "Service is visible on the website." : "Service is hidden from the website." });
+      onChange();
+    } catch (error) {
+      setMsg({ ok: false, text: apiErrorMessage(error, "Could not update visibility") });
     }
     setBusy(false);
   }
@@ -677,7 +738,7 @@ function ServiceEditor({ row, onChange }: { row: ServiceRow; onChange: () => voi
           />
           <div className="flex flex-wrap items-center gap-3 border-t border-border pt-5">
             {can("services.update") && <button onClick={save} disabled={busy} className="btn btn-primary h-10 px-5 text-sm">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save</button>}
-            {can("services.update") && <button onClick={() => setR({ ...r, published: !r.published })} className="btn btn-outline h-10 px-4 text-sm">
+            {can("services.update") && <button type="button" onClick={toggleVisibility} disabled={busy} className="btn btn-outline h-10 px-4 text-sm">
               {r.published ? <><EyeOff className="h-4 w-4" />Hide from site</> : <><Eye className="h-4 w-4" />Show on site</>}
             </button>}
             {can("services.delete") && <button onClick={del} className="btn btn-outline h-10 px-4 text-sm text-destructive"><Trash2 className="h-4 w-4" />Delete</button>}
@@ -694,14 +755,23 @@ function ServiceEditor({ row, onChange }: { row: ServiceRow; onChange: () => voi
 function JobsPanel({ onSaved }: { onSaved: () => void }) {
   const can = useCan();
   const [rows, setRows] = useState<JobRow[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [addError, setAddError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const load = useCallback(() => {
-    careersApi.listAdmin().then((data) => setRows(data.map(careerToJobRow))).catch(() => setRows([]));
+    setLoadError(null);
+    careersApi.listAdmin()
+      .then((data) => setRows(data.map(careerToJobRow)))
+      .catch((error) => {
+        setRows([]);
+        setLoadError(apiErrorMessage(error, "Could not load openings"));
+      });
   }, []);
   useEffect(load, [load]);
 
   async function add() {
     setAdding(true);
+    setAddError(null);
     try {
       const sort = (rows?.reduce((m, r) => Math.max(m, r.sort), 0) ?? 0) + 1;
       await careersApi.create({
@@ -719,6 +789,8 @@ function JobsPanel({ onSaved }: { onSaved: () => void }) {
       });
       load();
       onSaved();
+    } catch (error) {
+      setAddError(apiErrorMessage(error, "Could not add opening"));
     } finally {
       setAdding(false);
     }
@@ -727,9 +799,11 @@ function JobsPanel({ onSaved }: { onSaved: () => void }) {
   if (!rows) return <Loading />;
   return (
     <>
-      <PanelHead title="Careers" text="Add, edit, hide or remove job openings shown on the Careers page."
+      <PanelHead title="Careers" text="Add, edit, hide or remove job openings shown on the Careers page. New openings stay hidden until you show them on the site."
         action={can("careers.create") ? <button onClick={add} disabled={adding} className="btn btn-primary">{adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Add opening</button> : undefined} />
-      {rows.length === 0 && <p className="text-muted-foreground">No openings yet.</p>}
+      {loadError && <p role="alert" className="mb-4 text-sm text-destructive">{loadError}</p>}
+      {addError && <p role="alert" className="mb-4 text-sm text-destructive">{addError}</p>}
+      {rows.length === 0 && !loadError && <p className="text-muted-foreground">No openings yet.</p>}
       <div className="space-y-5">
         {rows.map((r) => <JobEditor key={r.id} row={r} onChange={() => { load(); onSaved(); }} />)}
       </div>
@@ -850,8 +924,6 @@ function JobEditor({ row, onChange }: { row: JobRow; onChange: () => void }) {
 
 /* ---------------- inbox panels ---------------- */
 
-type EnqRow = { id: string; name: string; company: string | null; email: string; phone: string; service: string; message: string; created_at: string };
-
 const fmt = (d: string) => new Date(d).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 
 function ApplicationsPanel() {
@@ -920,21 +992,38 @@ function ApplicationsPanel() {
 
 function EnquiriesPanel() {
   const can = useCan();
-  const [rows, setRows] = useState<EnqRow[] | null>(null);
+  const [rows, setRows] = useState<Enquiry[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const load = useCallback(() => {
-    supabase.from("enquiries").select("*").order("created_at", { ascending: false }).then(({ data }) => setRows(data ?? []));
+    setLoadError(null);
+    enquiriesApi.list()
+      .then((data) => setRows(data))
+      .catch((error) => {
+        setRows([]);
+        setLoadError(apiErrorMessage(error, "Could not load enquiries."));
+      });
   }, []);
   useEffect(load, [load]);
   async function del(id: string) {
     if (!confirm("Delete this enquiry?")) return;
-    await supabase.from("enquiries").delete().eq("id", id);
-    load();
+    setActionError(null);
+    const previous = rows;
+    try {
+      await enquiriesApi.delete(id);
+      setRows((current) => current?.filter((row) => row.id !== id) ?? []);
+    } catch (error) {
+      setRows(previous);
+      setActionError(apiErrorMessage(error, "Could not delete enquiry."));
+    }
   }
   if (!rows) return <Loading />;
   return (
     <>
-      <PanelHead title="Enquiries" text="Messages submitted through the Contact page. Enquiry storage still uses its existing database rules; these controls follow your Credex permissions." />
-      {rows.length === 0 && <Empty text="No enquiries yet." />}
+      <PanelHead title="Enquiries" text="Messages submitted through the Contact page." />
+      {loadError && <p role="alert" className="mb-4 text-sm text-destructive">{loadError}</p>}
+      {actionError && <p role="alert" className="mb-4 text-sm text-destructive">{actionError}</p>}
+      {rows.length === 0 && !loadError && <Empty text="No enquiries yet." />}
       <div className="space-y-4">
         {rows.map((q) => (
           <article key={q.id} className="card-site p-6">

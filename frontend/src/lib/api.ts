@@ -16,42 +16,72 @@ export class ApiError extends Error {
   }
 }
 
-/** Nest API on this machine. Backend `PORT` is 1000. */
+/** Local Nest API. Used only when developing on this machine. */
 const LOCAL_API_BASE_URL = "http://127.0.0.1:1000/api/v1";
 
-function configuredApiBaseUrl(): string | undefined {
-  const fromVite = import.meta.env.VITE_API_BASE_URL as string | undefined;
-  if (typeof fromVite === "string" && fromVite.trim()) return fromVite.trim().replace(/\/$/, "");
-  if (typeof process !== "undefined" && process.env.API_BASE_URL) {
-    return process.env.API_BASE_URL.replace(/\/$/, "");
+export class ApiConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ApiConfigError";
   }
+}
+
+function configuredApiBaseUrl(): string | undefined {
+  const fromVite = import.meta.env["VITE_API_BASE_URL"] as string | undefined;
+  if (typeof fromVite === "string" && fromVite.trim()) return fromVite.trim().replace(/\/$/, "");
+  const fromProcess = typeof process !== "undefined" ? process.env["API_BASE_URL"] : undefined;
+  if (typeof fromProcess === "string" && fromProcess.trim()) return fromProcess.trim().replace(/\/$/, "");
   return undefined;
 }
 
-function isQuickTunnel(url: string): boolean {
+function isLoopbackHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+}
+
+function isLoopbackApi(url: string): boolean {
   try {
-    return new URL(url).hostname.endsWith(".trycloudflare.com");
+    return isLoopbackHost(new URL(url).hostname);
   } catch {
     return false;
   }
 }
 
+export interface ApiBaseUrlContext {
+  /** True for the Vite dev server and its browser bundle. */
+  dev: boolean;
+  /** Set in the browser. Absent during server-side rendering. */
+  pageHostname?: string;
+}
+
 /**
- * Browser calls from https://credexfin.com use the local API when the baked
- * base URL is a Cloudflare quick tunnel. Those hostnames expire, and the live
- * one is a different backend than the API on port 1000.
+ * Browser and server-side rendering share one configured API URL.
+ * A loopback URL is allowed only for local development. A public page must
+ * never be sent to the visitor's own computer.
  */
-export function resolveApiBaseUrl(configured: string | undefined, pageHostname?: string): string {
-  if (configured && pageHostname && isQuickTunnel(configured)) {
-    return LOCAL_API_BASE_URL;
+export function resolveApiBaseUrl(configured: string | undefined, context: ApiBaseUrlContext): string {
+  const pageHostname = context.pageHostname;
+  const onPublicPage = Boolean(pageHostname && !isLoopbackHost(pageHostname));
+
+  if (!configured) {
+    if (context.dev && !onPublicPage) return LOCAL_API_BASE_URL;
+    throw new ApiConfigError("Set VITE_API_BASE_URL to the public Credex API.");
   }
-  return configured ?? "http://localhost:3000/api/v1";
+
+  if (isLoopbackApi(configured)) {
+    if (!context.dev || onPublicPage) {
+      throw new ApiConfigError(
+        "The API URL is a local address. Set VITE_API_BASE_URL to the public Credex API.",
+      );
+    }
+  }
+
+  return configured;
 }
 
 export function getApiBaseUrl(): string {
-  const pageHostname =
-    typeof window !== "undefined" && import.meta.env.DEV ? window.location.hostname : undefined;
-  return resolveApiBaseUrl(configuredApiBaseUrl(), pageHostname);
+  const context: ApiBaseUrlContext = { dev: import.meta.env.DEV };
+  if (typeof window !== "undefined") context.pageHostname = window.location.hostname;
+  return resolveApiBaseUrl(configuredApiBaseUrl(), context);
 }
 
 let refreshPromise: Promise<boolean> | null = null;

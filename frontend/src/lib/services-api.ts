@@ -4,8 +4,12 @@ import type { Service, SiteContactImage } from "./api-types";
 export type CreateServicePayload = {
   title: string;
   description: string;
+  short?: string;
   icon?: string;
+  capabilities?: string[];
+  benefits?: string[];
   order: number;
+  isVisible?: boolean;
 };
 
 export type UpdateServicePayload = Partial<CreateServicePayload>;
@@ -13,6 +17,10 @@ export type UpdateServicePayload = Partial<CreateServicePayload>;
 export const servicesApi = {
   list(): Promise<Service[]> {
     return apiRequest<Service[]>("/services");
+  },
+
+  listAdmin(): Promise<Service[]> {
+    return apiRequest<Service[]>("/services/admin", { auth: true });
   },
 
   get(id: string): Promise<Service> {

@@ -126,6 +126,8 @@ export function ApplyForm({ careerId, role }: { careerId: string; role: string }
   const [errors, setErrors] = useState<Errors>({});
   const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [phase, setPhase] = useState<"saving" | "uploading" | null>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -142,26 +144,38 @@ export function ApplyForm({ careerId, role }: { careerId: string; role: string }
     setState("loading");
     setErrorText(null);
     const d = res.data;
+    let id = createdId;
     try {
-      const created = await applicationsApi.create({
-        careerId,
-        name: d.fullName,
-        email: d.email,
-        phone: d.phone,
-        experience: d.experience,
-        location: d.location,
-        ...(d.message ? { coverLetter: d.message } : {}),
-      });
-      await applicationsApi.uploadResume(created.id, file);
+      if (!id) {
+        setPhase("saving");
+        const created = await applicationsApi.create({
+          careerId,
+          name: d.fullName,
+          email: d.email,
+          phone: d.phone,
+          experience: d.experience,
+          location: d.location,
+          ...(d.message ? { coverLetter: d.message } : {}),
+        });
+        id = created.id;
+        setCreatedId(id);
+      }
+      setPhase("uploading");
+      await applicationsApi.uploadResume(id, file);
       setState("done");
     } catch (error) {
-      setErrorText(apiErrorMessage(error, "Something went wrong. Please try again."));
+      const detail = apiErrorMessage(error, "Something went wrong. Please try again.");
+      setErrorText(id
+        ? `Your application was saved, but the resume did not upload. ${detail} Submit again to retry the upload without creating another application.`
+        : detail);
       setState("error");
+    } finally {
+      setPhase(null);
     }
   }
 
   if (state === "done")
-    return <Success title="Application submitted." text={`Thank you for applying for the ${role} role. Our HR team will review your profile and contact you if shortlisted.`} onReset={() => { setFile(null); setState("idle"); }} />;
+    return <Success title="Application submitted." text={`Thank you for applying for the ${role} role. Our HR team will review your profile and contact you if shortlisted.`} onReset={() => { setFile(null); setCreatedId(null); setState("idle"); }} />;
 
   const inv = (k: keyof Errors) => ({ "aria-invalid": !!errors[k], "aria-describedby": errors[k] ? `${k}-error` : undefined });
 
@@ -176,7 +190,7 @@ export function ApplyForm({ careerId, role }: { careerId: string; role: string }
         <Field id="resume" label="Resume" required error={errors.resume}>
           <label htmlFor="resume" className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-input bg-surface px-4 py-5 text-sm hover:border-primary focus-within:border-primary">
             <Upload className="h-5 w-5 text-primary" />
-            <span className="text-muted-foreground">{file ? <span className="font-medium text-foreground">{file.name}</span> : "Upload PDF or Word document (max 5 MB)"}</span>
+            <span className="text-muted-foreground">{file ? <span className="font-medium text-foreground">{file.name}</span> : "Upload PDF or Word document (max 10 MB)"}</span>
             <input id="resume" name="resume" type="file" accept=".pdf,.doc,.docx" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] ?? null)} {...inv("resume")} />
           </label>
         </Field>
@@ -189,7 +203,7 @@ export function ApplyForm({ careerId, role }: { careerId: string; role: string }
       )}
       <div className="sm:col-span-2">
         <button type="submit" disabled={state === "loading"} className="btn btn-primary w-full sm:w-auto">
-          {state === "loading" ? <><Loader2 className="h-4 w-4 animate-spin" /> Submitting…</> : "Submit Application"}
+          {state === "loading" ? <><Loader2 className="h-4 w-4 animate-spin" /> {phase === "uploading" ? "Uploading resume…" : "Saving application…"}</> : createdId ? "Retry resume upload" : "Submit Application"}
         </button>
       </div>
     </form>
