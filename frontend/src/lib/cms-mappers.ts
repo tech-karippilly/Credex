@@ -81,6 +81,6 @@ export function careerToJobRow(career: Career): JobRow {
     requirements: career.requirements ?? [],
     good_to_have: (career.goodToHave ?? []).join("\n"),
     sort: career.order,
-    published: career.isVisible,
+    published: career.isVisible ?? true,
   };
 }
