@@ -6,6 +6,11 @@ import { ADMIN_DISPLAY_NAME, ADMIN_SUBJECT } from '../constants/auth.constants';
 import { JwtPayload } from '../dto/jwt-payload.dto';
 import { AuthenticatedUser } from '../interfaces/authenticated-user.interface';
 import { UsersService } from '../../users/users.service';
+import {
+  isUserActive,
+  readAuthVersion,
+  tokenAuthVersion,
+} from '../../users/utils/user-account.util';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -40,6 +45,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
     const user = await this.usersService.findById(payload.sub);
     if (!user || user.email !== payload.email.toLowerCase()) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+
+    if (!isUserActive(user)) {
+      throw new UnauthorizedException('Unauthorized');
+    }
+
+    if (tokenAuthVersion(payload) !== readAuthVersion(user)) {
       throw new UnauthorizedException('Unauthorized');
     }
 

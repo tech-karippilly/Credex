@@ -27,6 +27,10 @@ export type Voucher = {
   paidBy: string;
   payee: string;
   amount: number;
+  amountPaid: number;
+  outstandingAmount: number;
+  availableToAllocate: number;
+  settlementStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
   currency: string;
   paymentMode: PaymentMode;
   categoryId: string | null;
@@ -100,6 +104,7 @@ export type VoucherListParams = {
   search?: string;
   voucherType?: VoucherType;
   status?: VoucherStatus;
+  paymentMode?: PaymentMode;
   categoryId?: string;
   from?: string;
   to?: string;
@@ -113,6 +118,7 @@ export const vouchersApi = {
     if (params?.search) search.set("search", params.search);
     if (params?.voucherType) search.set("voucherType", params.voucherType);
     if (params?.status) search.set("status", params.status);
+    if (params?.paymentMode) search.set("paymentMode", params.paymentMode);
     if (params?.categoryId) search.set("categoryId", params.categoryId);
     if (params?.from) search.set("from", params.from);
     if (params?.to) search.set("to", params.to);

@@ -144,6 +144,50 @@ export async function apiRequest<T>(
   return run(true);
 }
 
+export async function apiDownload(path: string): Promise<{ blob: Blob; filename: string }> {
+  const run = async (retry: boolean): Promise<{ blob: Blob; filename: string }> => {
+    const reqHeaders = new Headers();
+    reqHeaders.set("Accept", "application/octet-stream, application/json");
+    const token = getAccessToken();
+    if (token) reqHeaders.set("Authorization", `Bearer ${token}`);
+
+    const res = await fetch(`${getApiBaseUrl()}${path.startsWith("/") ? path : `/${path}`}`, {
+      method: "GET",
+      headers: reqHeaders,
+    });
+
+    if (res.status === 401 && retry) {
+      const refreshed = await ensureRefreshed();
+      if (refreshed) return run(false);
+      if (typeof window !== "undefined" && window.location.pathname.startsWith("/admin")) {
+        window.location.href = "/admin";
+      }
+      throw new ApiError(401, "Session expired. Please sign in again.");
+    }
+
+    if (!res.ok) {
+      const text = await res.text();
+      let message = res.statusText || "Request failed";
+      if (text) {
+        try {
+          const parsed = JSON.parse(text) as { message?: string };
+          if (parsed.message) message = parsed.message;
+        } catch {
+          message = text;
+        }
+      }
+      throw new ApiError(res.status, message);
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get("Content-Disposition") ?? "";
+    const match = /filename="([^"]+)"/.exec(disposition);
+    return { blob, filename: match?.[1] ?? "report.xlsx" };
+  };
+
+  return run(true);
+}
+
 export function apiErrorMessage(error: unknown, fallback = "Something went wrong"): string {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error && error.message) return error.message;

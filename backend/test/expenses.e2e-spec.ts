@@ -199,6 +199,52 @@ describe('Expenses (e2e)', () => {
         .expect(200);
     });
 
+    it('updates fields without dropping the receipt or creating another expense', async () => {
+      const token = await loginAsAdmin();
+      const created = await createExpense(token);
+
+      await expenseModel.findByIdAndUpdate(created.id, {
+        receipt: {
+          url: 'https://res.cloudinary.com/test/image/upload/receipt.jpg',
+          publicId: 'credex/expenses/mock',
+          fileName: 'receipt.jpg',
+          mimeType: 'image/jpeg',
+        },
+      });
+
+      const updated = await request(app.getHttpServer())
+        .put(`/api/v1/expenses/${created.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          expenseName: 'AWS Hosting Renamed',
+          amount: 42.5,
+          notes: 'Edited',
+        })
+        .expect(200);
+
+      expect(updated.body.data.id).toBe(created.id);
+      expect(updated.body.data.expenseName).toBe('AWS Hosting Renamed');
+      expect(updated.body.data.amount).toBe(42.5);
+      expect(updated.body.data.notes).toBe('Edited');
+      expect(updated.body.data.receipt.fileName).toBe('receipt.jpg');
+
+      await request(app.getHttpServer())
+        .put(`/api/v1/expenses/${created.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ amount: 0 })
+        .expect(400);
+
+      const list = await request(app.getHttpServer())
+        .get('/api/v1/expenses')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(list.body.data.pagination.total).toBe(1);
+      expect(list.body.data.items[0].id).toBe(created.id);
+      expect(list.body.data.items[0].amount).toBe(42.5);
+      expect(list.body.data.items[0].receipt.fileName).toBe('receipt.jpg');
+    });
+
     it('rejects creating expenses with inactive categories', async () => {
       const token = await loginAsAdmin();
       const inactive = await categoryModel.create({

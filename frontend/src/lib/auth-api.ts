@@ -1,5 +1,6 @@
 import { apiRequest } from "./api";
 import type { AuthUser, LoginResponse } from "./api-types";
+import type { AdminAccess } from "./permissions";
 import { clearAuthSession, getRefreshToken, setAuthSession } from "./auth-storage";
 
 export const authApi = {
@@ -17,6 +18,10 @@ export const authApi = {
 
   async profile(): Promise<AuthUser> {
     return apiRequest<AuthUser>("/auth/profile", { auth: true });
+  },
+
+  async access(): Promise<AdminAccess> {
+    return apiRequest<AdminAccess>("/auth/access", { auth: true });
   },
 
   async logout(): Promise<void> {

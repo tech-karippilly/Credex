@@ -1,11 +1,13 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
+import { RbacModule } from '../rbac/rbac.module';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { EmailModule } from '../email/email.module';
 import { ExpenseCategoriesModule } from '../expense-categories/expense-categories.module';
 import { WhatsappModule } from '../whatsapp/whatsapp.module';
 import { Expense, ExpenseSchema } from '../expenses/schemas/expense.schema';
+import { PaymentsModule } from '../payments/payments.module';
 import {
   VoucherCounter,
   VoucherCounterSchema,
@@ -26,9 +28,11 @@ import { VouchersService } from './vouchers.service';
     ]),
     CloudinaryModule,
     AuthModule,
+    RbacModule,
     ExpenseCategoriesModule,
     EmailModule,
     WhatsappModule,
+    forwardRef(() => PaymentsModule),
   ],
   controllers: [VouchersController],
   providers: [
@@ -37,5 +41,6 @@ import { VouchersService } from './vouchers.service';
     VoucherPdfService,
     VoucherSharingService,
   ],
+  exports: [MongooseModule],
 })
 export class VouchersModule {}

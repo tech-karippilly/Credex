@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { useCan } from "@/components/admin/admin-access";
 import { apiErrorMessage, ApiError } from "@/lib/api";
 import {
   expenseCategoriesApi,
@@ -26,6 +27,7 @@ type FormState = {
 const emptyForm = (): FormState => ({ name: "", description: "", order: "" });
 
 export function ExpenseCategoriesPanel() {
+  const can = useCan();
   const [rows, setRows] = useState<ExpenseCategoryAdmin[] | null>(null);
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [editing, setEditing] = useState<ExpenseCategoryAdmin | null>(null);
@@ -143,12 +145,14 @@ export function ExpenseCategoriesPanel() {
         title="Expense Categories"
         text="Manage categories used for company expenses."
       />
+      {can("expense_categories.create") && (
       <div className="mb-6 flex justify-end">
         <button type="button" onClick={openAdd} className="btn btn-primary">
           <Plus className="h-4 w-4" />
           Add category
         </button>
       </div>
+      )}
 
       {msg && (
         <p role="status" className="mb-4 text-sm text-destructive">{msg}</p>
@@ -182,6 +186,7 @@ export function ExpenseCategoriesPanel() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  {can("expense_categories.update") && (
                   <button
                     type="button"
                     onClick={() => openEdit(category)}
@@ -190,6 +195,8 @@ export function ExpenseCategoriesPanel() {
                     <Pencil className="h-4 w-4" />
                     Edit
                   </button>
+                  )}
+                  {can("expense_categories.status.update") && (
                   <button
                     type="button"
                     onClick={() => toggleStatus(category)}
@@ -197,7 +204,8 @@ export function ExpenseCategoriesPanel() {
                   >
                     {category.isActive ? "Disable" : "Enable"}
                   </button>
-                  {!category.isActive && (
+                  )}
+                  {can("expense_categories.delete") && !category.isActive && (
                     <button
                       type="button"
                       onClick={() => remove(category)}
