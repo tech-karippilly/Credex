@@ -16,6 +16,23 @@ export class User {
 
   @Prop({ required: true, select: false })
   password!: string;
+
+  @Prop({ default: true })
+  isActive!: boolean;
+
+  @Prop({ default: false })
+  isSuperAdmin!: boolean;
+
+  @Prop({ default: 0 })
+  authVersion!: number;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+
+UserSchema.index(
+  { isSuperAdmin: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isSuperAdmin: true },
+  },
+);

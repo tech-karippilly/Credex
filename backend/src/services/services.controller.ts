@@ -14,8 +14,9 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator';
+import { PermissionsGuard } from '../rbac/guards/permissions.guard';
 import { CreateServiceDto } from './dto/create-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
 import { ServicesService } from './services.service';
@@ -49,7 +50,8 @@ export class ServicesController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('services.create')
   async create(@Body() createServiceDto: CreateServiceDto) {
     const data = await this.servicesService.create(createServiceDto);
 
@@ -61,7 +63,8 @@ export class ServicesController {
   }
 
   @Put(':id')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('services.update')
   async update(
     @Param('id') id: string,
     @Body() updateServiceDto: UpdateServiceDto,
@@ -76,7 +79,8 @@ export class ServicesController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('services.delete')
   async remove(@Param('id') id: string) {
     await this.servicesService.remove(id);
 
@@ -87,7 +91,8 @@ export class ServicesController {
   }
 
   @Post(':id/image')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('services.update')
   @UseInterceptors(FileInterceptor('image'))
   async uploadImage(
     @Param('id') id: string,
@@ -113,7 +118,8 @@ export class ServicesController {
   }
 
   @Delete(':id/image')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('services.update')
   async removeImage(@Param('id') id: string) {
     const data = await this.servicesService.removeImage(id);
 

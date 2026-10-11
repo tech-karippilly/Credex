@@ -16,6 +16,10 @@ export function buildVoucherFilterFromQuery(
     filter.status = query.status;
   }
 
+  if (query.paymentMode) {
+    filter.paymentMode = query.paymentMode;
+  }
+
   if (query.categoryId) {
     filter.categoryId = new Types.ObjectId(query.categoryId);
   }

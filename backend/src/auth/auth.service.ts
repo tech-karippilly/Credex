@@ -6,12 +6,19 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
+import { randomUUID } from 'crypto';
 import { AuthSessionsService } from '../auth-sessions/auth-sessions.service';
 import { secureCompareStrings } from '../common/utils/token-hash.util';
 import { EmailService } from '../email/email.service';
 import { PasswordResetService } from '../password-reset/password-reset.service';
 import { UserResponse } from '../users/interfaces/user-response.interface';
 import { UsersService } from '../users/users.service';
+import {
+  isUserActive,
+  isUserSuperAdmin,
+  readAuthVersion,
+  tokenAuthVersion,
+} from '../users/utils/user-account.util';
 import { ADMIN_DISPLAY_NAME, ADMIN_SUBJECT } from './constants/auth.constants';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { JwtPayload } from './dto/jwt-payload.dto';
@@ -90,7 +97,7 @@ export class AuthService {
       loginDto.password,
       user.password,
     );
-    if (!passwordMatches) {
+    if (!passwordMatches || !isUserActive(user)) {
       throw new UnauthorizedException('Invalid email or password');
     }
 
@@ -98,6 +105,7 @@ export class AuthService {
     const tokens = await this.issueTokenPair(
       userResponse.id,
       userResponse.email,
+      readAuthVersion(user),
     );
 
     return {
@@ -118,6 +126,25 @@ export class AuthService {
 
     if (!session) {
       throw new UnauthorizedException('Unauthorized');
+    }
+
+    if (payload.sub !== ADMIN_SUBJECT) {
+      const user = await this.usersService.findById(payload.sub);
+      const emailMatches = user?.email === payload.email.toLowerCase().trim();
+      const versionMatches =
+        user !== null && tokenAuthVersion(payload) === readAuthVersion(user);
+
+      if (!user || !emailMatches || !isUserActive(user) || !versionMatches) {
+        await this.authSessionsService.revokeSession(session._id.toString());
+        throw new UnauthorizedException('Unauthorized');
+      }
+
+      await this.authSessionsService.revokeSession(session._id.toString());
+      return this.issueTokenPair(
+        user._id.toString(),
+        user.email,
+        readAuthVersion(user),
+      );
     }
 
     await this.authSessionsService.revokeSession(session._id.toString());
@@ -142,7 +169,7 @@ export class AuthService {
     const email = dto.email.toLowerCase().trim();
     const user = await this.usersService.findByEmail(email);
 
-    if (user) {
+    if (user && !isUserSuperAdmin(user) && !this.isAdminEmail(email)) {
       const rawToken = this.passwordResetService.generateResetToken();
       const resetExpiresIn = this.configService.getOrThrow<string>(
         'passwordReset.expiresIn',
@@ -187,18 +214,27 @@ export class AuthService {
     }
 
     const userId = record.userId.toString();
+    const user = await this.usersService.findById(userId);
+    if (!user || isUserSuperAdmin(user) || this.isAdminEmail(user.email)) {
+      throw new BadRequestException('Invalid or expired reset token');
+    }
+
     const passwordHash = await this.hashPassword(dto.password);
 
     await this.usersService.updatePassword(userId, passwordHash);
+    await this.usersService.incrementAuthVersion(userId);
     await this.passwordResetService.markTokenAsUsed(record._id.toString());
-    await this.authSessionsService.revokeAllForUser(userId);
   }
 
   private async issueTokenPair(
     userId: string,
     email: string,
+    authVersion?: number,
   ): Promise<{ accessToken: string; refreshToken: string }> {
     const payload: JwtPayload = { sub: userId, email };
+    if (authVersion !== undefined) {
+      payload.authVersion = authVersion;
+    }
     const accessToken = await this.signAccessToken(payload);
     const refreshToken = await this.signRefreshToken(payload);
     const expiresAt = this.getRefreshTokenExpiry(refreshToken);
@@ -224,10 +260,13 @@ export class AuthService {
     const expiresIn = this.configService.getOrThrow<string>(
       'jwt.refreshExpiresIn',
     );
-    return this.jwtService.signAsync(payload, {
-      secret: this.configService.getOrThrow<string>('jwt.refreshSecret'),
-      expiresIn: expiresIn as `${number}${'s' | 'm' | 'h' | 'd'}`,
-    });
+    return this.jwtService.signAsync(
+      { ...payload, jti: randomUUID() },
+      {
+        secret: this.configService.getOrThrow<string>('jwt.refreshSecret'),
+        expiresIn: expiresIn as `${number}${'s' | 'm' | 'h' | 'd'}`,
+      },
+    );
   }
 
   private async verifyRefreshToken(refreshToken: string): Promise<JwtPayload> {

@@ -3,12 +3,19 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   LayoutDashboard, Settings, Layers, Briefcase, FileText, Inbox, LogOut, Loader2, Plus, Trash2,
-  Save, ExternalLink, Upload, Eye, EyeOff, Download, Wallet, Receipt, Tags,
+  Save, ExternalLink, Upload, Eye, EyeOff, Download, Wallet, Receipt, Tags, Banknote, BarChart3,
+  Users, Shield,
 } from "lucide-react";
+import { AdminAccessProvider, useCan } from "@/components/admin/admin-access";
 import { ExpenseCategoriesPanel } from "@/components/admin/expense-categories";
+import { RolesPanel } from "@/components/admin/roles-panel";
+import { UsersPanel } from "@/components/admin/users-panel";
 import { supabase } from "@/integrations/supabase/client";
 import { Logo } from "@/components/site/Logo";
+import { PasswordInput } from "@/components/ui/password-input";
 import { ExpensesPanel, VouchersPanel, type VoucherDraft } from "@/components/admin/finance";
+import { PaymentsPanel } from "@/components/admin/payments-panel";
+import { ReportsPanel } from "@/components/admin/reports-panel";
 import { ICONS, contentQuery } from "@/lib/content";
 import { DEFAULT_SETTINGS, type ServiceRow, type JobRow } from "@/lib/content.functions";
 import { authApi } from "@/lib/auth-api";
@@ -27,6 +34,12 @@ import {
   type SiteSettingsForm,
 } from "@/lib/cms-mappers";
 import { OG_IMAGE_URL, siteIconLinks } from "@/lib/site";
+import {
+  canEnterAdmin,
+  canSeeAdminTab,
+  type AdminAccess,
+  type AdminTab,
+} from "@/lib/permissions";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -48,8 +61,14 @@ export const Route = createFileRoute("/admin")({
 
 function AdminPage() {
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [access, setAccess] = useState<AdminAccess | null>(null);
   const [ready, setReady] = useState(false);
-  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  const loadAccess = useCallback(async () => {
+    const profile = await authApi.profile();
+    const nextAccess = await authApi.access();
+    return { profile, nextAccess };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -58,30 +77,29 @@ function AdminPage() {
       if (!isAuthenticated()) {
         if (!cancelled) {
           setUser(null);
-          setIsAdmin(null);
+          setAccess(null);
           setReady(true);
         }
         return;
       }
 
       try {
-        const profile = await authApi.profile();
-        await careersApi.listAdmin();
+        const { profile, nextAccess } = await loadAccess();
         if (!cancelled) {
           setUser(profile);
-          setIsAdmin(true);
+          setAccess(nextAccess);
         }
       } catch (error) {
         if (error instanceof ApiError && error.status === 403) {
           if (!cancelled) {
             setUser(getStoredUser());
-            setIsAdmin(false);
+            setAccess({ superAdmin: false, permissions: [] });
           }
         } else {
           clearAuthSession();
           if (!cancelled) {
             setUser(null);
-            setIsAdmin(null);
+            setAccess(null);
           }
         }
       } finally {
@@ -91,12 +109,32 @@ function AdminPage() {
 
     bootstrap();
     return () => { cancelled = true; };
-  }, []);
+  }, [loadAccess]);
 
-  if (!ready || (user && isAdmin === null))
+  useEffect(() => {
+    if (!user) return;
+    function onFocus() {
+      loadAccess()
+        .then(({ profile, nextAccess }) => {
+          setUser(profile);
+          setAccess(nextAccess);
+        })
+        .catch((error) => {
+          if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+            clearAuthSession();
+            setUser(null);
+            setAccess(null);
+          }
+        });
+    }
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [user, loadAccess]);
+
+  if (!ready || (user && !access))
     return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
-  if (!user) return <Login onSignedIn={() => window.location.reload()} />;
-  if (!isAdmin)
+  if (!user || !access) return <Login onSignedIn={() => window.location.reload()} />;
+  if (!canEnterAdmin(access))
     return (
       <Centered>
         <h1 className="text-2xl font-semibold">No admin access</h1>
@@ -104,7 +142,11 @@ function AdminPage() {
         <button className="btn btn-outline mt-6" onClick={() => authApi.logout().then(() => window.location.reload())}>Sign out</button>
       </Centered>
     );
-  return <Dashboard user={user} onProfile={(p) => setUser(p)} />;
+  return (
+    <AdminAccessProvider access={access}>
+      <Dashboard user={user} access={access} onProfile={(p) => setUser(p)} />
+    </AdminAccessProvider>
+  );
 }
 
 function Centered({ children }: { children: ReactNode }) {
@@ -119,31 +161,26 @@ function Centered({ children }: { children: ReactNode }) {
 }
 
 function Login({ onSignedIn }: { onSignedIn: () => void }) {
-  const [mode, setMode] = useState<"in" | "up">("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true); setMsg(null);
     try {
-      if (mode === "in") {
-        await authApi.login(email, password);
-        onSignedIn();
-      } else {
-        setMsg({ ok: false, text: "Admin accounts are configured on the server. Use sign in with your admin credentials." });
-      }
+      await authApi.login(email, password);
+      onSignedIn();
     } catch (error) {
-      setMsg({ ok: false, text: apiErrorMessage(error, "Sign in failed") });
+      setMsg(apiErrorMessage(error, "Sign in failed"));
     }
     setBusy(false);
   }
 
   return (
     <Centered>
-      <h1 className="text-2xl font-semibold">{mode === "in" ? "Admin sign in" : "Create admin account"}</h1>
+      <h1 className="text-2xl font-semibold">Admin sign in</h1>
       <p className="mt-2 text-sm text-muted-foreground">Manage website content, careers and enquiries.</p>
       <form onSubmit={submit} className="mt-6 space-y-4">
         <div>
@@ -152,38 +189,60 @@ function Login({ onSignedIn }: { onSignedIn: () => void }) {
         </div>
         <div>
           <label htmlFor="a-pass" className="mb-2 block text-sm font-semibold">Password</label>
-          <input id="a-pass" type="password" required minLength={8} autoComplete={mode === "in" ? "current-password" : "new-password"} className="field" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordInput id="a-pass" required minLength={8} autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
-        {msg && <p role="status" className={`text-sm ${msg.ok ? "text-success" : "text-destructive"}`}>{msg.text}</p>}
+        {msg && <p role="status" className="text-sm text-destructive">{msg}</p>}
         <button className="btn btn-primary w-full" disabled={busy}>
-          {busy && <Loader2 className="h-4 w-4 animate-spin" />}{mode === "in" ? "Sign in" : "Create account"}
+          {busy && <Loader2 className="h-4 w-4 animate-spin" />}Sign in
         </button>
       </form>
-      <button type="button" className="mt-5 text-sm font-medium text-primary" onClick={() => { setMode(mode === "in" ? "up" : "in"); setMsg(null); }}>
-        {mode === "in" ? "First time? Create the admin account" : "Already have an account? Sign in"}
-      </button>
     </Centered>
   );
 }
 
 /* ---------------- dashboard ---------------- */
 
-type Tab = "overview" | "settings" | "services" | "jobs" | "applications" | "enquiries" | "expenses" | "expense-categories" | "vouchers";
-const TABS: { id: Tab; label: string; icon: typeof Settings }[] = [
-  { id: "overview", label: "Overview", icon: LayoutDashboard },
-  { id: "settings", label: "Site & Contact", icon: Settings },
-  { id: "services", label: "Services", icon: Layers },
-  { id: "jobs", label: "Careers", icon: Briefcase },
-  { id: "applications", label: "Applications", icon: FileText },
-  { id: "enquiries", label: "Enquiries", icon: Inbox },
-  { id: "expenses", label: "Expenses", icon: Wallet },
-  { id: "expense-categories", label: "Expense Categories", icon: Tags },
-  { id: "vouchers", label: "Vouchers", icon: Receipt },
-];
+type Tab = AdminTab;
+const TAB_ICONS: Record<Tab, typeof Settings> = {
+  overview: LayoutDashboard,
+  settings: Settings,
+  services: Layers,
+  jobs: Briefcase,
+  applications: FileText,
+  enquiries: Inbox,
+  expenses: Wallet,
+  "expense-categories": Tags,
+  vouchers: Receipt,
+  payments: Banknote,
+  reports: BarChart3,
+  users: Users,
+  roles: Shield,
+};
 
-function Dashboard({ user, onProfile }: { user: AuthUser; onProfile: (user: AuthUser) => void }) {
+function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminAccess; onProfile: (user: AuthUser) => void }) {
   const [tab, setTab] = useState<Tab>("overview");
+  const tabs = [
+    { id: "overview" as const, label: "Overview" },
+    { id: "settings" as const, label: "Site & Contact" },
+    { id: "services" as const, label: "Services" },
+    { id: "jobs" as const, label: "Careers" },
+    { id: "applications" as const, label: "Applications" },
+    { id: "enquiries" as const, label: "Enquiries" },
+    { id: "expenses" as const, label: "Expenses" },
+    { id: "expense-categories" as const, label: "Expense Categories" },
+    { id: "vouchers" as const, label: "Vouchers" },
+    { id: "payments" as const, label: "Payments" },
+    { id: "reports" as const, label: "Reports" },
+    { id: "users" as const, label: "Users" },
+    { id: "roles" as const, label: "Roles" },
+  ].filter((item) => canSeeAdminTab(access, item.id));
+
+  useEffect(() => {
+    if (!canSeeAdminTab(access, tab)) setTab("overview");
+  }, [access, tab]);
   const [draft, setDraft] = useState<Partial<VoucherDraft> | null>(null);
+  const [paymentFocus, setPaymentFocus] = useState<string | null>(null);
+  const [voucherSearch, setVoucherSearch] = useState<string | null>(null);
   const qc = useQueryClient();
   const refreshSite = useCallback(() => qc.invalidateQueries({ queryKey: contentQuery.queryKey }), [qc]);
 
@@ -205,12 +264,15 @@ function Dashboard({ user, onProfile }: { user: AuthUser; onProfile: (user: Auth
           <p className="hidden truncate pt-6 text-xs text-muted-foreground lg:block">{user.email}</p>
         </div>
         <nav aria-label="Admin" className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:pb-0">
-          {TABS.map((t) => (
+          {tabs.map((t) => {
+            const Icon = TAB_ICONS[t.id];
+            return (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${tab === t.id ? "bg-secondary text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
-              <t.icon className="h-4 w-4" />{t.label}
+              <Icon className="h-4 w-4" />{t.label}
             </button>
-          ))}
+            );
+          })}
         </nav>
         <div className="hidden space-y-1 p-3 lg:absolute lg:bottom-0 lg:block lg:w-full">
           <a href="/" target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"><ExternalLink className="h-4 w-4" />View website</a>
@@ -221,7 +283,7 @@ function Dashboard({ user, onProfile }: { user: AuthUser; onProfile: (user: Auth
         <div className="mb-6 flex justify-end lg:hidden">
           <button onClick={signOut} className="btn btn-outline h-9 px-4 text-sm"><LogOut className="h-4 w-4" />Sign out</button>
         </div>
-        {tab === "overview" && <Overview go={setTab} />}
+        {tab === "overview" && <Overview go={setTab} access={access} />}
         {tab === "settings" && <SettingsPanel onSaved={refreshSite} />}
         {tab === "services" && <ServicesPanel onSaved={refreshSite} />}
         {tab === "jobs" && <JobsPanel onSaved={refreshSite} />}
@@ -241,7 +303,40 @@ function Dashboard({ user, onProfile }: { user: AuthUser; onProfile: (user: Auth
           setTab("vouchers");
         }} />}
         {tab === "expense-categories" && <ExpenseCategoriesPanel />}
-        {tab === "vouchers" && <VouchersPanel draft={draft} />}
+        {tab === "vouchers" && (
+          <VouchersPanel
+            draft={draft}
+            initialSearch={voucherSearch}
+            onOpenPayment={(id) => {
+              setPaymentFocus(id);
+              setTab("payments");
+            }}
+          />
+        )}
+        {tab === "payments" && (
+          <PaymentsPanel
+            focusId={paymentFocus}
+            onFocusHandled={() => setPaymentFocus(null)}
+            onOpenVoucher={(voucherNumber) => {
+              setVoucherSearch(voucherNumber);
+              setTab("vouchers");
+            }}
+          />
+        )}
+        {tab === "reports" && (
+          <ReportsPanel
+            onOpenVoucher={(voucherNumber) => {
+              setVoucherSearch(voucherNumber);
+              setTab("vouchers");
+            }}
+            onOpenPayment={(id) => {
+              setPaymentFocus(id);
+              setTab("payments");
+            }}
+          />
+        )}
+        {tab === "users" && <UsersPanel />}
+        {tab === "roles" && <RolesPanel />}
       </main>
     </div>
   );
@@ -281,6 +376,7 @@ function ImageField({
   onChange,
   onUploadFile,
   onRemove,
+  locked = false,
 }: {
   id: string;
   label: string;
@@ -288,6 +384,7 @@ function ImageField({
   onChange: (v: string) => void;
   onUploadFile: (file: File) => Promise<string>;
   onRemove?: () => void | Promise<void>;
+  locked?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -298,7 +395,7 @@ function ImageField({
           {value ? <img src={value} alt="" className="h-full w-full object-cover" /> : <span className="flex h-full items-center justify-center text-xs text-muted-foreground">Default</span>}
         </div>
         <div className="flex flex-wrap gap-2">
-          <label htmlFor={id} className="btn btn-outline h-10 cursor-pointer px-4 text-sm">
+          {!locked && <label htmlFor={id} className="btn btn-outline h-10 cursor-pointer px-4 text-sm">
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload
             <input id={id} type="file" accept="image/*" className="sr-only" disabled={busy}
               onChange={async (e) => {
@@ -307,8 +404,8 @@ function ImageField({
                 try { onChange(await onUploadFile(f)); } catch (x) { setErr(apiErrorMessage(x, "Upload failed")); }
                 setBusy(false); e.target.value = "";
               }} />
-          </label>
-          {value && <button type="button" onClick={async () => { if (onRemove) await onRemove(); else onChange(""); }} className="btn btn-outline h-10 px-4 text-sm">Remove</button>}
+          </label>}
+          {!locked && value && <button type="button" onClick={async () => { if (onRemove) await onRemove(); else onChange(""); }} className="btn btn-outline h-10 px-4 text-sm">Remove</button>}
         </div>
       </div>
       {err && <p className="mt-2 text-sm text-destructive">{err}</p>}
@@ -320,31 +417,36 @@ const lines = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
 
 /* ---------------- overview ---------------- */
 
-function Overview({ go }: { go: (t: Tab) => void }) {
+function Overview({ go, access }: { go: (t: Tab) => void; access: AdminAccess }) {
   const [c, setC] = useState({ services: 0, jobs: 0, applications: 0, enquiries: 0 });
   useEffect(() => {
+    let cancelled = false;
     (async () => {
-      const q = (t: "enquiries") => supabase.from(t).select("*", { count: "exact", head: true });
-      const [services, careers, applications, enquiries] = await Promise.all([
-        servicesApi.list(),
-        careersApi.listAdmin(),
-        applicationsApi.list(),
-        q("enquiries"),
-      ]);
-      setC({
-        services: services.length,
-        jobs: careers.length,
-        applications: applications.length,
-        enquiries: enquiries.count ?? 0,
-      });
+      const services = canSeeAdminTab(access, "services") ? await servicesApi.list().catch(() => []) : [];
+      const careers = canSeeAdminTab(access, "jobs") ? await careersApi.listAdmin().catch(() => []) : [];
+      const applications = canSeeAdminTab(access, "applications") ? await applicationsApi.list().catch(() => []) : [];
+      const enquiries = canSeeAdminTab(access, "enquiries")
+        ? await supabase.from("enquiries").select("*", { count: "exact", head: true })
+        : { count: 0 };
+      if (!cancelled) {
+        setC({
+          services: services.length,
+          jobs: careers.length,
+          applications: applications.length,
+          enquiries: enquiries.count ?? 0,
+        });
+      }
     })();
-  }, []);
-  const cards: { label: string; value: number; tab: Tab; icon: typeof Settings }[] = [
-    { label: "Services", value: c.services, tab: "services", icon: Layers },
-    { label: "Job openings", value: c.jobs, tab: "jobs", icon: Briefcase },
-    { label: "Applications", value: c.applications, tab: "applications", icon: FileText },
-    { label: "Enquiries", value: c.enquiries, tab: "enquiries", icon: Inbox },
-  ];
+    return () => { cancelled = true; };
+  }, [access]);
+  const cards = (
+    [
+      { label: "Services", value: c.services, tab: "services" as const, icon: Layers },
+      { label: "Job openings", value: c.jobs, tab: "jobs" as const, icon: Briefcase },
+      { label: "Applications", value: c.applications, tab: "applications" as const, icon: FileText },
+      { label: "Enquiries", value: c.enquiries, tab: "enquiries" as const, icon: Inbox },
+    ] as const
+  ).filter((card) => canSeeAdminTab(access, card.tab));
   return (
     <>
       <PanelHead title="Dashboard" text="Manage your website content, careers and incoming enquiries." />
@@ -364,6 +466,7 @@ function Overview({ go }: { go: (t: Tab) => void }) {
 /* ---------------- settings ---------------- */
 
 function SettingsPanel({ onSaved }: { onSaved: () => void }) {
+  const canUpdate = useCan()("site_contact.update");
   const [s, setS] = useState<SiteSettingsForm | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -396,13 +499,13 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
   }
 
   const text = (k: keyof SiteSettingsForm, label: string, type = "text", hint?: string) => (
-    <Lbl id={k} label={label} {...(hint ? { hint } : {})}><input id={k} type={type} className="field" value={s[k] as string} onChange={(e) => set(k)(e.target.value)} /></Lbl>
+    <Lbl id={k} label={label} {...(hint ? { hint } : {})}><input id={k} type={type} className="field" readOnly={!canUpdate} value={s[k] as string} onChange={(e) => set(k)(e.target.value)} /></Lbl>
   );
 
   return (
     <>
       <PanelHead title="Site & Contact" text="Contact details, social links, homepage text and images."
-        action={<button onClick={save} disabled={busy} className="btn btn-primary">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save changes</button>} />
+        action={canUpdate ? <button onClick={save} disabled={busy} className="btn btn-primary">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save changes</button> : undefined} />
       <div className="space-y-6">
         <section className="card-site space-y-5 p-6 md:p-8">
           <h2 className="text-lg font-semibold">Contact information</h2>
@@ -417,7 +520,7 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
         <section className="card-site space-y-5 p-6 md:p-8">
           <h2 className="text-lg font-semibold">Homepage</h2>
           {text("hero_title", "Main headline")}
-          <Lbl id="hero_text" label="Supporting text"><textarea id="hero_text" rows={3} className="field h-auto py-3" value={s.hero_text} onChange={(e) => set("hero_text")(e.target.value)} /></Lbl>
+          <Lbl id="hero_text" label="Supporting text"><textarea id="hero_text" rows={3} className="field h-auto py-3" readOnly={!canUpdate} value={s.hero_text} onChange={(e) => set("hero_text")(e.target.value)} /></Lbl>
           <div className="grid gap-6 md:grid-cols-2">
             <ImageField
               id="hero_image"
@@ -430,6 +533,7 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
                 return img.url;
               }}
               onRemove={() => setS({ ...s, hero_image: "", hero_image_publicId: "" })}
+              locked={!canUpdate}
             />
             <ImageField
               id="about_image"
@@ -442,6 +546,7 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
                 return img.url;
               }}
               onRemove={() => setS({ ...s, about_image: "", about_image_publicId: "" })}
+              locked={!canUpdate}
             />
           </div>
         </section>
@@ -454,6 +559,7 @@ function SettingsPanel({ onSaved }: { onSaved: () => void }) {
 /* ---------------- services ---------------- */
 
 function ServicesPanel({ onSaved }: { onSaved: () => void }) {
+  const can = useCan();
   const [rows, setRows] = useState<ServiceRow[] | null>(null);
   const [adding, setAdding] = useState(false);
   const load = useCallback(() => {
@@ -482,7 +588,7 @@ function ServicesPanel({ onSaved }: { onSaved: () => void }) {
   return (
     <>
       <PanelHead title="Services" text="Edit service titles, descriptions, icons and images. Lower order numbers appear first."
-        action={<button onClick={add} disabled={adding} className="btn btn-primary">{adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Add service</button>} />
+        action={can("services.create") ? <button onClick={add} disabled={adding} className="btn btn-primary">{adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Add service</button> : undefined} />
       <div className="space-y-5">
         {rows.map((r) => <ServiceEditor key={r.id} row={r} onChange={() => { load(); onSaved(); }} />)}
       </div>
@@ -491,6 +597,7 @@ function ServicesPanel({ onSaved }: { onSaved: () => void }) {
 }
 
 function ServiceEditor({ row, onChange }: { row: ServiceRow; onChange: () => void }) {
+  const can = useCan();
   const [r, setR] = useState(row);
   const [caps, setCaps] = useState(row.capabilities.join("\n"));
   const [bens, setBens] = useState(row.benefits.join("\n"));
@@ -566,13 +673,14 @@ function ServiceEditor({ row, onChange }: { row: ServiceRow; onChange: () => voi
               const updated = await servicesApi.deleteImage(r.id);
               setR({ ...r, image_url: updated.image?.url ?? "" });
             }}
+            locked={!can("services.update")}
           />
           <div className="flex flex-wrap items-center gap-3 border-t border-border pt-5">
-            <button onClick={save} disabled={busy} className="btn btn-primary h-10 px-5 text-sm">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save</button>
-            <button onClick={() => setR({ ...r, published: !r.published })} className="btn btn-outline h-10 px-4 text-sm">
+            {can("services.update") && <button onClick={save} disabled={busy} className="btn btn-primary h-10 px-5 text-sm">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save</button>}
+            {can("services.update") && <button onClick={() => setR({ ...r, published: !r.published })} className="btn btn-outline h-10 px-4 text-sm">
               {r.published ? <><EyeOff className="h-4 w-4" />Hide from site</> : <><Eye className="h-4 w-4" />Show on site</>}
-            </button>
-            <button onClick={del} className="btn btn-outline h-10 px-4 text-sm text-destructive"><Trash2 className="h-4 w-4" />Delete</button>
+            </button>}
+            {can("services.delete") && <button onClick={del} className="btn btn-outline h-10 px-4 text-sm text-destructive"><Trash2 className="h-4 w-4" />Delete</button>}
             <Toast msg={msg} />
           </div>
         </div>
@@ -584,6 +692,7 @@ function ServiceEditor({ row, onChange }: { row: ServiceRow; onChange: () => voi
 /* ---------------- jobs ---------------- */
 
 function JobsPanel({ onSaved }: { onSaved: () => void }) {
+  const can = useCan();
   const [rows, setRows] = useState<JobRow[] | null>(null);
   const [adding, setAdding] = useState(false);
   const load = useCallback(() => {
@@ -619,7 +728,7 @@ function JobsPanel({ onSaved }: { onSaved: () => void }) {
   return (
     <>
       <PanelHead title="Careers" text="Add, edit, hide or remove job openings shown on the Careers page."
-        action={<button onClick={add} disabled={adding} className="btn btn-primary">{adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Add opening</button>} />
+        action={can("careers.create") ? <button onClick={add} disabled={adding} className="btn btn-primary">{adding ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Add opening</button> : undefined} />
       {rows.length === 0 && <p className="text-muted-foreground">No openings yet.</p>}
       <div className="space-y-5">
         {rows.map((r) => <JobEditor key={r.id} row={r} onChange={() => { load(); onSaved(); }} />)}
@@ -629,6 +738,7 @@ function JobsPanel({ onSaved }: { onSaved: () => void }) {
 }
 
 function JobEditor({ row, onChange }: { row: JobRow; onChange: () => void }) {
+  const can = useCan();
   const [r, setR] = useState(row);
   const [resp, setResp] = useState(row.responsibilities.join("\n"));
   const [reqs, setReqs] = useState(row.requirements.join("\n"));
@@ -662,7 +772,6 @@ function JobEditor({ row, onChange }: { row: JobRow; onChange: () => void }) {
         requirements: lines(reqs),
         goodToHave: lines(good),
         order: r.sort,
-        isVisible: r.published,
       });
       setMsg({ ok: true, text: "Career updated successfully." });
       onChange();
@@ -726,11 +835,11 @@ function JobEditor({ row, onChange }: { row: JobRow; onChange: () => void }) {
           </div>
           <Lbl id={`g-${r.id}`} label="Good to have" hint="One per line."><textarea id={`g-${r.id}`} rows={2} className="field h-auto py-3" value={good} onChange={(e) => setGood(e.target.value)} /></Lbl>
           <div className="flex flex-wrap items-center gap-3 border-t border-border pt-5">
-            <button onClick={save} disabled={busy} className="btn btn-primary h-10 px-5 text-sm">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save</button>
-            <button onClick={toggleVisibility} disabled={busy} className="btn btn-outline h-10 px-4 text-sm">
+            {can("careers.update") && <button onClick={save} disabled={busy} className="btn btn-primary h-10 px-5 text-sm">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save</button>}
+            {can("careers.status.update") && <button onClick={toggleVisibility} disabled={busy} className="btn btn-outline h-10 px-4 text-sm">
               {r.published ? <><EyeOff className="h-4 w-4" />Hide from site</> : <><Eye className="h-4 w-4" />Show on site</>}
-            </button>
-            <button onClick={del} disabled={busy} className="btn btn-outline h-10 px-4 text-sm text-destructive"><Trash2 className="h-4 w-4" />Delete</button>
+            </button>}
+            {can("careers.delete") && <button onClick={del} disabled={busy} className="btn btn-outline h-10 px-4 text-sm text-destructive"><Trash2 className="h-4 w-4" />Delete</button>}
             <Toast msg={msg} />
           </div>
         </div>
@@ -746,6 +855,7 @@ type EnqRow = { id: string; name: string; company: string | null; email: string;
 const fmt = (d: string) => new Date(d).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
 
 function ApplicationsPanel() {
+  const can = useCan();
   const [rows, setRows] = useState<JobApplication[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const load = useCallback(() => {
@@ -799,7 +909,7 @@ function ApplicationsPanel() {
                   <Download className="h-4 w-4" />Resume
                 </a>
               )}
-              <button onClick={() => del(a.id)} className="btn btn-outline h-9 px-4 text-sm text-destructive"><Trash2 className="h-4 w-4" />Delete</button>
+              {can("applications.delete") && <button onClick={() => del(a.id)} className="btn btn-outline h-9 px-4 text-sm text-destructive"><Trash2 className="h-4 w-4" />Delete</button>}
             </div>
           </article>
         ))}
@@ -809,6 +919,7 @@ function ApplicationsPanel() {
 }
 
 function EnquiriesPanel() {
+  const can = useCan();
   const [rows, setRows] = useState<EnqRow[] | null>(null);
   const load = useCallback(() => {
     supabase.from("enquiries").select("*").order("created_at", { ascending: false }).then(({ data }) => setRows(data ?? []));
@@ -822,7 +933,7 @@ function EnquiriesPanel() {
   if (!rows) return <Loading />;
   return (
     <>
-      <PanelHead title="Enquiries" text="Messages submitted through the Contact page." />
+      <PanelHead title="Enquiries" text="Messages submitted through the Contact page. Enquiry storage still uses its existing database rules; these controls follow your Credex permissions." />
       {rows.length === 0 && <Empty text="No enquiries yet." />}
       <div className="space-y-4">
         {rows.map((q) => (
@@ -839,7 +950,7 @@ function EnquiriesPanel() {
               <Info k="Phone" v={<a className="text-primary" href={`tel:${q.phone}`}>{q.phone}</a>} />
             </dl>
             <p className="mt-4 whitespace-pre-line rounded-lg bg-surface p-4 text-sm">{q.message}</p>
-            <button onClick={() => del(q.id)} className="btn btn-outline mt-4 h-9 px-4 text-sm text-destructive"><Trash2 className="h-4 w-4" />Delete</button>
+            {can("enquiries.delete") && <button onClick={() => del(q.id)} className="btn btn-outline mt-4 h-9 px-4 text-sm text-destructive"><Trash2 className="h-4 w-4" />Delete</button>}
           </article>
         ))}
       </div>

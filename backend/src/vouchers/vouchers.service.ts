@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   InternalServerErrorException,
@@ -13,6 +14,11 @@ import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { Expense, ExpenseDocument } from '../expenses/schemas/expense.schema';
 import { formatExpenseDate, parseExpenseDate } from '../expenses/utils/expense-date.util';
 import { inrToPaise, paiseToInr } from '../expenses/utils/money.util';
+import {
+  PaymentAllocation,
+  PaymentAllocationDocument,
+} from '../payments/schemas/payment-allocation.schema';
+import { settlementStatus } from '../payments/utils/payment-rules';
 import {
   DEFAULT_VOUCHER_STATUS,
   VOUCHER_CURRENCY,
@@ -40,6 +46,8 @@ export class VouchersService {
     private readonly voucherModel: Model<VoucherDocument>,
     @InjectModel(Expense.name)
     private readonly expenseModel: Model<ExpenseDocument>,
+    @InjectModel(PaymentAllocation.name)
+    private readonly paymentAllocationModel: Model<PaymentAllocationDocument>,
     private readonly cloudinaryService: CloudinaryService,
     private readonly expenseCategoriesService: ExpenseCategoriesService,
     private readonly voucherNumberService: VoucherNumberService,
@@ -59,6 +67,17 @@ export class VouchersService {
       paidBy: document.paidBy,
       payee: document.payee,
       amount: paiseToInr(document.amountPaise),
+      amountPaid: paiseToInr(document.settledPaise ?? 0),
+      outstandingAmount: paiseToInr(
+        Math.max(0, document.amountPaise - (document.settledPaise ?? 0)),
+      ),
+      availableToAllocate: paiseToInr(
+        Math.max(0, document.amountPaise - (document.reservedPaise ?? 0)),
+      ),
+      settlementStatus: settlementStatus(
+        document.amountPaise,
+        document.settledPaise ?? 0,
+      ),
       currency: document.currency ?? VOUCHER_CURRENCY,
       paymentMode: document.paymentMode,
       categoryId: this.resolveCategoryId(document),
@@ -165,6 +184,8 @@ export class VouchersService {
   }
 
   async update(id: string, updateDto: UpdateVoucherDto): Promise<VoucherResponse> {
+    const existing = await this.findDocumentById(id);
+    this.assertSettlementCompatible(existing, updateDto);
     const update: Record<string, unknown> = {};
 
     if (updateDto.voucherDate !== undefined) {
@@ -232,6 +253,9 @@ export class VouchersService {
   }
 
   async updateStatus(id: string, status: string): Promise<VoucherResponse> {
+    const existing = await this.findDocumentById(id);
+    this.assertSettlementCompatible(existing, { status });
+
     const updated = await this.voucherModel
       .findByIdAndUpdate(id, { status }, { new: true, runValidators: true })
       .populate(POPULATE_PATHS)
@@ -246,6 +270,19 @@ export class VouchersService {
 
   async remove(id: string): Promise<void> {
     const voucher = await this.findDocumentById(id);
+    const allocationCount = await this.paymentAllocationModel.countDocuments({
+      voucherId: voucher._id,
+    });
+
+    if (
+      (voucher.reservedPaise ?? 0) > 0 ||
+      (voucher.settledPaise ?? 0) > 0 ||
+      allocationCount > 0
+    ) {
+      throw new ConflictException(
+        'This voucher has payment allocations and cannot be deleted',
+      );
+    }
 
     if (voucher.document?.publicId) {
       await this.safeDeleteDocument(voucher.document);
@@ -322,6 +359,35 @@ export class VouchersService {
 
     const populated = await this.populateRelations(voucher);
     return this.toResponse(populated);
+  }
+
+  private assertSettlementCompatible(
+    existing: VoucherDocument,
+    updateDto: { amount?: number; status?: string; voucherType?: string },
+  ): void {
+    const reserved = existing.reservedPaise ?? 0;
+    if (reserved <= 0) return;
+
+    if (
+      updateDto.amount !== undefined &&
+      inrToPaise(updateDto.amount) < reserved
+    ) {
+      throw new BadRequestException(
+        'Voucher amount cannot be reduced below the amount reserved by payment allocations',
+      );
+    }
+
+    if (updateDto.status === 'CANCELLED' || updateDto.status === 'DRAFT') {
+      throw new BadRequestException(
+        'Release the linked payment allocations before marking this voucher draft or cancelled',
+      );
+    }
+
+    if (updateDto.voucherType === 'RECEIPT') {
+      throw new BadRequestException(
+        'A voucher with payment allocations cannot be changed to a receipt',
+      );
+    }
   }
 
   private async assertExpenseExists(expenseId: string): Promise<ExpenseDocument> {

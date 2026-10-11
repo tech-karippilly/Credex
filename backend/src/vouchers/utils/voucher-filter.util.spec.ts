@@ -17,4 +17,12 @@ describe('buildVoucherFilterFromQuery', () => {
     expect(filter.$or).toBeDefined();
     expect(filter.voucherDate).toBeDefined();
   });
+
+  it('filters by payment mode', () => {
+    const filter = buildVoucherFilterFromQuery({
+      paymentMode: 'CHEQUE',
+    } as VoucherQueryDto);
+
+    expect(filter.paymentMode).toBe('CHEQUE');
+  });
 });

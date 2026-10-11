@@ -10,6 +10,7 @@ import {
   Min,
 } from 'class-validator';
 import {
+  PAYMENT_MODES,
   VOUCHER_STATUSES,
   VOUCHER_TYPES,
 } from '../constants/voucher.constants';
@@ -27,6 +28,10 @@ export class VoucherQueryDto {
   @IsOptional()
   @IsEnum(VOUCHER_STATUSES)
   status?: string;
+
+  @IsOptional()
+  @IsEnum(PAYMENT_MODES)
+  paymentMode?: string;
 
   @IsOptional()
   @IsMongoId()

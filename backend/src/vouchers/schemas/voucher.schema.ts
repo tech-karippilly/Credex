@@ -43,6 +43,14 @@ export class Voucher {
   @Prop({ required: true, min: 1 })
   amountPaise!: number;
 
+  /** Paise reserved by non-void payment allocations. Missing on historical vouchers means zero. */
+  @Prop({ required: true, default: 0, min: 0 })
+  reservedPaise!: number;
+
+  /** Paise settled by cleared or completed payments only. Missing on historical vouchers means zero. */
+  @Prop({ required: true, default: 0, min: 0 })
+  settledPaise!: number;
+
   @Prop({ required: true, default: VOUCHER_CURRENCY, enum: [VOUCHER_CURRENCY] })
   currency!: string;
 

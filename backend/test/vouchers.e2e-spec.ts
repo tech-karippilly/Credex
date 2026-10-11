@@ -295,6 +295,104 @@ describe('Vouchers (e2e)', () => {
       expect(updated.body.data.title).toBe('Updated title');
       expect(updated.body.data.amount).toBe(6000);
       expect(updated.body.data.voucherNumber).toBe(voucherNumber);
+      expect(updated.body.data.status).toBe(created.body.data.status);
+    });
+
+    it('edits a draft without a new number, status change, or duplicate', async () => {
+      const token = await loginAsAdmin();
+      const categoryId = await categoryIdByName(token, 'Server');
+      const expense = await createExpense(token, categoryId);
+
+      const created = await request(app.getHttpServer())
+        .post('/api/v1/vouchers')
+        .set('Authorization', `Bearer ${token}`)
+        .send(
+          voucherPayload({
+            status: 'DRAFT',
+            categoryId,
+            expenseId: expense.id,
+          }),
+        )
+        .expect(201);
+
+      const updatedExpense = await request(app.getHttpServer())
+        .put(`/api/v1/expenses/${expense.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ expenseName: 'AWS Hosting Renamed', amount: 5100 })
+        .expect(200);
+
+      expect(updatedExpense.body.data.id).toBe(expense.id);
+
+      const afterExpenseEdit = await request(app.getHttpServer())
+        .get(`/api/v1/vouchers/${created.body.data.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(afterExpenseEdit.body.data.expenseId).toBe(expense.id);
+      expect(afterExpenseEdit.body.data.expense.expenseName).toBe(
+        'AWS Hosting Renamed',
+      );
+      expect(afterExpenseEdit.body.data.voucherNumber).toBe(
+        created.body.data.voucherNumber,
+      );
+      expect(afterExpenseEdit.body.data.status).toBe('DRAFT');
+
+      const updated = await request(app.getHttpServer())
+        .put(`/api/v1/vouchers/${created.body.data.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          voucherDate: '2026-10-09',
+          title: 'Updated hosting',
+          payee: 'Amazon',
+          amount: 5200,
+          paymentMode: 'UPI',
+          referenceNumber: 'UTR999',
+          notes: 'Edited note',
+          expenseId: expense.id,
+        })
+        .expect(200);
+
+      expect(updated.body.data.id).toBe(created.body.data.id);
+      expect(updated.body.data.voucherNumber).toBe(
+        created.body.data.voucherNumber,
+      );
+      expect(updated.body.data.status).toBe('DRAFT');
+      expect(updated.body.data.expenseId).toBe(expense.id);
+      expect(updated.body.data.amount).toBe(5200);
+      expect(updated.body.data.paymentMode).toBe('UPI');
+      expect(updated.body.data.payee).toBe('Amazon');
+      expect(updated.body.data.referenceNumber).toBe('UTR999');
+      expect(updated.body.data.notes).toBe('Edited note');
+
+      const list = await request(app.getHttpServer())
+        .get('/api/v1/vouchers')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      expect(list.body.data.pagination.total).toBe(1);
+    });
+
+    it('keeps a completed voucher number and status when details change', async () => {
+      const token = await loginAsAdmin();
+      const created = await request(app.getHttpServer())
+        .post('/api/v1/vouchers')
+        .set('Authorization', `Bearer ${token}`)
+        .send(voucherPayload())
+        .expect(201);
+
+      expect(created.body.data.status).toBe('COMPLETED');
+
+      const updated = await request(app.getHttpServer())
+        .put(`/api/v1/vouchers/${created.body.data.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ title: 'Still completed', amount: 10 })
+        .expect(200);
+
+      expect(updated.body.data.status).toBe('COMPLETED');
+      expect(updated.body.data.voucherNumber).toBe(
+        created.body.data.voucherNumber,
+      );
+      expect(updated.body.data.title).toBe('Still completed');
     });
 
     it('updates status via patch', async () => {

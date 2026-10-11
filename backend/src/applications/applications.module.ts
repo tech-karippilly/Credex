@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AiModule } from '../ai/ai.module';
 import { AuthModule } from '../auth/auth.module';
+import { RbacModule } from '../rbac/rbac.module';
 import { CareersModule } from '../careers/careers.module';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { ApplicationsController } from './applications.controller';
@@ -15,6 +16,7 @@ import { Application, ApplicationSchema } from './schemas/application.schema';
       { name: Application.name, schema: ApplicationSchema },
     ]),
     AuthModule,
+    RbacModule,
     CareersModule,
     CloudinaryModule,
     AiModule,
