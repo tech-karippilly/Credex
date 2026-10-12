@@ -1,9 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { CheckCircle2, Loader2, Upload, AlertCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { applicationsApi } from "@/lib/applications-api";
 import { apiErrorMessage } from "@/lib/api";
+import { enquiriesApi } from "@/lib/enquiries-api";
 import { useContent } from "@/lib/content";
 
 type Errors = Partial<Record<"name"|"company"|"email"|"phone"|"service"|"message"|"fullName"|"experience"|"location"|"resume", string>>;
@@ -59,20 +59,41 @@ export function ContactForm() {
   const { services, settings } = useContent();
   const [errors, setErrors] = useState<Errors>({});
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const submitting = useRef(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (submitting.current) return;
     const data = Object.fromEntries(new FormData(e.currentTarget));
     const res = contactSchema.safeParse(data);
     const errs = collectErrors(res);
     setErrors(errs);
-    if (!res.success) return;
+    if (!res.success) {
+      setErrorText(null);
+      setState("idle");
+      return;
+    }
+    submitting.current = true;
     setState("loading");
+    setErrorText(null);
     const d = res.data;
-    const { error } = await supabase.from("enquiries").insert({
-      name: d.name, company: d.company || null, email: d.email, phone: d.phone, service: d.service, message: d.message,
-    });
-    setState(error ? "error" : "done");
+    try {
+      await enquiriesApi.create({
+        name: d.name,
+        email: d.email,
+        phone: d.phone,
+        service: d.service,
+        message: d.message,
+        ...(d.company ? { company: d.company } : {}),
+      });
+      setState("done");
+    } catch (error) {
+      setErrorText(apiErrorMessage(error, "Something went wrong. Please try again."));
+      setState("error");
+    } finally {
+      submitting.current = false;
+    }
   }
 
   if (state === "done")
@@ -101,7 +122,7 @@ export function ContactForm() {
         </Field>
       </div>
       {state === "error" && (
-        <p role="alert" className="flex items-center gap-2 text-sm text-destructive sm:col-span-2"><AlertCircle className="h-4 w-4" /> Something went wrong. Please try again or email {settings.email}.</p>
+        <p role="alert" className="flex items-center gap-2 text-sm text-destructive sm:col-span-2"><AlertCircle className="h-4 w-4 shrink-0" /> {errorText ?? "Something went wrong. Please try again."} You can also email {settings.email}.</p>
       )}
       <div className="sm:col-span-2">
         <button type="submit" disabled={state === "loading"} className="btn btn-primary w-full sm:w-auto">

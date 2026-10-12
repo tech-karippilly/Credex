@@ -8,10 +8,23 @@ export interface Enquiry {
   phone: string;
   service: string;
   message: string;
-  created_at: string;
+  createdAt: string;
+}
+
+export interface CreateEnquiryInput {
+  name: string;
+  company?: string;
+  email: string;
+  phone: string;
+  service: string;
+  message: string;
 }
 
 export const enquiriesApi = {
+  create(input: CreateEnquiryInput): Promise<Enquiry> {
+    return apiRequest<Enquiry>("/enquiries", { method: "POST", json: input });
+  },
+
   list(): Promise<Enquiry[]> {
     return apiRequest<Enquiry[]>("/enquiries", { auth: true });
   },

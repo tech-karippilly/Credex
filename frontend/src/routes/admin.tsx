@@ -1032,7 +1032,7 @@ function EnquiriesPanel() {
                 <h2 className="text-lg font-semibold">{q.name}{q.company && <span className="font-normal text-muted-foreground"> · {q.company}</span>}</h2>
                 <p className="text-sm text-primary">{q.service}</p>
               </div>
-              <p className="text-xs text-muted-foreground">{fmt(q.created_at)}</p>
+              <p className="text-xs text-muted-foreground">{fmt(q.createdAt)}</p>
             </div>
             <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
               <Info k="Email" v={<a className="text-primary" href={`mailto:${q.email}`}>{q.email}</a>} />
