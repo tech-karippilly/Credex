@@ -25,20 +25,9 @@ export class RolePermissionsService {
   ) {}
 
   async listKeys(roleId: string): Promise<string[]> {
-    const permissionIds = await this.permissionIdsForRole(roleId);
-    if (permissionIds.length === 0) {
-      return this.legacyKeysForRole(roleId);
-    }
-
-    const permissions = await this.permissionModel
-      .find({ _id: { $in: permissionIds } })
-      .select('key')
-      .exec();
-    const keys = permissions
-      .map((permission) => permission.key)
-      .filter((key): key is string => Boolean(key));
+    const keys = await this.linkedKeys(roleId);
     if (keys.length > 0) {
-      return keys.sort();
+      return keys;
     }
 
     return this.legacyKeysForRole(roleId);
@@ -137,20 +126,34 @@ export class RolePermissionsService {
   ): Promise<{ added: string[]; removed: string[] }> {
     const unique = [...new Set(permissionKeys)];
     await this.assertKeysExist(unique);
+    await this.requireRole(roleId);
+
     const current = await this.listKeys(roleId);
     const next = new Set(unique);
     const added = unique.filter((key) => !current.includes(key));
     const removed = current.filter((key) => !next.has(key));
+    // Older roles keep permission codes on the role document. Those keys are
+    // visible, but they have no role_permissions row to revoke. Write the
+    // submitted selection as joins, then drop the legacy codes so a later
+    // empty join set cannot bring the previous codes back.
+    const linked = new Set(await this.linkedKeys(roleId));
     const granted: string[] = [];
 
     try {
-      for (const key of added) {
+      for (const key of unique) {
+        if (linked.has(key)) {
+          continue;
+        }
         await this.grant(roleId, key);
         granted.push(key);
       }
       for (const key of removed) {
+        if (!linked.has(key)) {
+          continue;
+        }
         await this.revoke(roleId, key);
       }
+      await this.clearLegacyPermissionCodes(roleId);
     } catch (error) {
       for (const key of granted) {
         await this.revoke(roleId, key).catch(() => undefined);
@@ -224,6 +227,33 @@ export class RolePermissionsService {
     if (!deleted) {
       throw new NotFoundException('Role permission not found');
     }
+  }
+
+  private async linkedKeys(roleId: string): Promise<string[]> {
+    const permissionIds = await this.permissionIdsForRole(roleId);
+    if (permissionIds.length === 0) {
+      return [];
+    }
+
+    const permissions = await this.permissionModel
+      .find({ _id: { $in: permissionIds } })
+      .select('key')
+      .exec();
+    return permissions
+      .map((permission) => permission.key)
+      .filter((key): key is string => Boolean(key))
+      .sort();
+  }
+
+  private async clearLegacyPermissionCodes(roleId: string): Promise<void> {
+    if (!isValidObjectId(roleId)) {
+      return;
+    }
+
+    await this.rolePermissionModel.db.collection('roles').updateOne(
+      { _id: new Types.ObjectId(roleId) },
+      { $unset: { permissions: '' } },
+    );
   }
 
   private async legacyKeysForRole(roleId: string): Promise<string[]> {

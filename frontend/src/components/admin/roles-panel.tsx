@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, Plus } from "lucide-react";
 import { useCan } from "@/components/admin/admin-access";
 import { apiErrorMessage } from "@/lib/api";
@@ -13,6 +13,8 @@ export function RolesPanel() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [permissionsRoleId, setPermissionsRoleId] = useState<string | null>(null);
+  const permissionRequest = useRef(0);
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -42,15 +44,25 @@ export function RolesPanel() {
   }, [catalogue]);
 
   function openRole(role: ManagedRoleDetail) {
+    const request = ++permissionRequest.current;
     setCreating(false);
     setSelectedId(role.id);
     setName(role.name);
     setDescription(role.description);
+    setSelectedKeys([]);
+    setPermissionsRoleId(null);
     setMsg(null);
     rolesApi
       .get(role.id)
-      .then((detail) => setSelectedKeys((detail.permissions ?? []).map((permission) => permission.key)))
-      .catch((error) => setMsg({ ok: false, text: apiErrorMessage(error, "Could not load role") }));
+      .then((detail) => {
+        if (permissionRequest.current !== request) return;
+        setSelectedKeys((detail.permissions ?? []).map((permission) => permission.key));
+        setPermissionsRoleId(role.id);
+      })
+      .catch((error) => {
+        if (permissionRequest.current !== request) return;
+        setMsg({ ok: false, text: apiErrorMessage(error, "Could not load role") });
+      });
   }
 
   async function saveRole(event: React.FormEvent) {
@@ -71,7 +83,11 @@ export function RolesPanel() {
         setMsg({ ok: true, text: "Role created." });
       } else if (selected) {
         await rolesApi.update(selected.id, { name: nextName, description: nextDescription });
-        if (can("roles.permissions.update") && !selected.systemManaged) {
+        if (
+          can("roles.permissions.update") &&
+          !selected.systemManaged &&
+          permissionsRoleId === selected.id
+        ) {
           await rolesApi.replacePermissions(selected.id, selectedKeys);
         }
         setMsg({ ok: true, text: "Role updated." });
@@ -100,7 +116,8 @@ export function RolesPanel() {
     }
   }
 
-  const locked = Boolean(selected?.systemManaged) || !can("roles.permissions.update");
+  const permissionsReady = Boolean(selected && permissionsRoleId === selected.id);
+  const locked = Boolean(selected?.systemManaged) || !can("roles.permissions.update") || !permissionsReady;
 
   return (
     <>
@@ -119,6 +136,7 @@ export function RolesPanel() {
               setName("");
               setDescription("");
               setSelectedKeys([]);
+              setPermissionsRoleId(null);
               setMsg(null);
             }}
           >
@@ -170,6 +188,7 @@ export function RolesPanel() {
               {!creating && (
                 <div className="space-y-4">
                   <h3 className="font-semibold">Permissions</h3>
+                  {!permissionsReady && <p className="text-sm text-muted-foreground">Loading permissions…</p>}
                   {groups.map(([module, permissions]) => (
                     <fieldset key={module} className="rounded-lg border border-border p-4">
                       <legend className="px-1 text-sm font-semibold">{permissionModuleLabel(module)}</legend>

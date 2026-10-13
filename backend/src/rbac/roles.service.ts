@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -6,6 +7,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { isValidObjectId, Model } from 'mongoose';
 import { Role, RoleDocument } from './schemas/role.schema';
+import { roleKeyFromName } from './utils/role-key';
 
 export interface CreateRoleInput {
   name: string;
@@ -63,10 +65,58 @@ export class RolesService {
     input: { name: string; description: string },
   ): Promise<RoleDocument> {
     const role = await this.requireRole(id);
-    role.name = input.name.trim();
-    role.description = input.description.trim();
-    await role.save();
-    return role;
+    const name = typeof input.name === 'string' ? input.name.trim() : '';
+    const description =
+      typeof input.description === 'string' ? input.description.trim() : '';
+    if (!name || !description) {
+      throw new BadRequestException('Name and description are required');
+    }
+
+    const changes: { name: string; description: string; key?: string } = {
+      name,
+      description,
+    };
+    // Older roles were stored without key. Assign one from the current name
+    // once. A later rename must not replace it. $set leaves every other
+    // field, including legacy permission codes, untouched.
+    const storedKey = typeof role.key === 'string' ? role.key.trim() : '';
+    if (!storedKey) {
+      if (typeof role.name !== 'string' || !role.name.trim()) {
+        throw new BadRequestException(
+          'Role name must contain at least two letters or numbers',
+        );
+      }
+      const key = roleKeyFromName(role.name);
+      const clash = await this.roleModel
+        .exists({ key, _id: { $ne: role._id } })
+        .exec();
+      if (clash) {
+        throw new ConflictException('Role key already exists');
+      }
+      changes.key = key;
+    }
+
+    try {
+      const updated = await this.roleModel
+        .findByIdAndUpdate(
+          role._id,
+          { $set: changes },
+          { returnDocument: 'after', runValidators: true },
+        )
+        .exec();
+      if (!updated) {
+        throw new NotFoundException('Role not found');
+      }
+      return updated;
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      if (this.isDuplicateKeyError(error)) {
+        throw new ConflictException('Role key already exists');
+      }
+      throw error;
+    }
   }
 
   async deleteById(id: string): Promise<RoleDocument> {

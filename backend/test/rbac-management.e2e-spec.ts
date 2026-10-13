@@ -1,4 +1,6 @@
 import { INestApplication } from '@nestjs/common';
+import { getConnectionToken } from '@nestjs/mongoose';
+import { Connection, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { RolesService } from '../src/rbac/roles.service';
@@ -331,5 +333,285 @@ describe('RBAC management (e2e)', () => {
       .set(header)
       .send({ name: 'Own Expenses', description: 'Duplicate' })
       .expect(409);
+  });
+
+  it('updates role details without dropping key or unrelated permissions', async () => {
+    const admin = await login(
+      adminCredentials.email,
+      adminCredentials.password,
+    );
+    const connection = app.get<Connection>(getConnectionToken());
+
+    const created = await request(app.getHttpServer())
+      .post('/api/v1/roles')
+      .set(auth(admin.accessToken))
+      .send({ name: 'Payroll Clerk', description: 'Payroll access' })
+      .expect(201);
+    expect(created.body.data.key).toBe('payroll_clerk');
+
+    const renamed = await request(app.getHttpServer())
+      .put(`/api/v1/roles/${created.body.data.id}`)
+      .set(auth(admin.accessToken))
+      .send({ name: 'Payroll Lead', description: 'Leads payroll' })
+      .expect(200);
+    expect(renamed.body.data.key).toBe('payroll_clerk');
+    expect(renamed.body.data.name).toBe('Payroll Lead');
+    expect(renamed.body.data.description).toBe('Leads payroll');
+
+    const rejectedKey = await request(app.getHttpServer())
+      .put(`/api/v1/roles/${created.body.data.id}`)
+      .set(auth(admin.accessToken))
+      .send({
+        name: 'Payroll Lead',
+        description: 'Leads payroll',
+        key: 'other_key',
+      })
+      .expect(400);
+    expect(rejectedKey.body.success).toBe(false);
+
+    const missing = await request(app.getHttpServer())
+      .put(`/api/v1/roles/${new Types.ObjectId().toString()}`)
+      .set(auth(admin.accessToken))
+      .send({ name: 'Nobody', description: 'Missing role' })
+      .expect(404);
+    expect(missing.body.message).toBe('Role not found');
+
+    await request(app.getHttpServer())
+      .put(`/api/v1/roles/${created.body.data.id}/permissions`)
+      .set(auth(admin.accessToken))
+      .send({ permissionKeys: ['expenses.read'] })
+      .expect(200);
+
+    const afterPermissions = await request(app.getHttpServer())
+      .get(`/api/v1/roles/${created.body.data.id}`)
+      .set(auth(admin.accessToken))
+      .expect(200);
+    expect(afterPermissions.body.data.key).toBe('payroll_clerk');
+    expect(afterPermissions.body.data.name).toBe('Payroll Lead');
+    expect(afterPermissions.body.data.permissions).toEqual([
+      expect.objectContaining({ key: 'expenses.read' }),
+    ]);
+
+    const legacy = await connection.collection('roles').insertOne({
+      name: 'Accountant',
+      description: 'Accounting operations',
+      permissions: ['ACCOUNT_VIEW'],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const repaired = await request(app.getHttpServer())
+      .put(`/api/v1/roles/${legacy.insertedId.toString()}`)
+      .set(auth(admin.accessToken))
+      .send({
+        name: 'Senior Accountant',
+        description: 'Updated accounting',
+      })
+      .expect(200);
+    expect(repaired.body.data.key).toBe('accountant');
+
+    const stored = await connection.collection('roles').findOne({
+      _id: legacy.insertedId,
+    });
+    expect(stored?.key).toBe('accountant');
+    expect(stored?.name).toBe('Senior Accountant');
+    expect(stored?.permissions).toEqual(['ACCOUNT_VIEW']);
+
+    const stillSameKey = await request(app.getHttpServer())
+      .put(`/api/v1/roles/${legacy.insertedId.toString()}`)
+      .set(auth(admin.accessToken))
+      .send({ name: 'Finance', description: 'Updated accounting' })
+      .expect(200);
+    expect(stillSameKey.body.data.key).toBe('accountant');
+
+    await expect(
+      connection.model('Role').create({
+        name: 'Missing Key',
+        description: 'No key',
+      }),
+    ).rejects.toThrow(/key/);
+
+    await rolesService.create({
+      name: 'Existing Bookkeeper',
+      key: 'bookkeeper',
+      description: 'Already using the key',
+    });
+    const duplicateLegacy = await connection.collection('roles').insertOne({
+      name: 'Bookkeeper',
+      description: 'Legacy bookkeeping role',
+      permissions: ['ACCOUNT_VIEW'],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const duplicate = await request(app.getHttpServer())
+      .put(`/api/v1/roles/${duplicateLegacy.insertedId.toString()}`)
+      .set(auth(admin.accessToken))
+      .send({
+        name: 'Bookkeeper',
+        description: 'Legacy bookkeeping role',
+      })
+      .expect(409);
+    expect(duplicate.body.message).toBe('Role key already exists');
+    const unchanged = await connection.collection('roles').findOne({
+      _id: duplicateLegacy.insertedId,
+    });
+    expect(unchanged?.key).toBeUndefined();
+    expect(unchanged?.permissions).toEqual(['ACCOUNT_VIEW']);
+  });
+
+  it('replaces legacy role permissions by catalogue key and keeps the role key', async () => {
+    const admin = await login(
+      adminCredentials.email,
+      adminCredentials.password,
+    );
+    const connection = app.get<Connection>(getConnectionToken());
+
+    const legacy = await connection.collection('roles').insertOne({
+      name: 'Branch Accountant',
+      key: 'branch_accountant',
+      description: 'Branch accounting',
+      permissions: ['ACCOUNT_VIEW'],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    const roleId = legacy.insertedId.toString();
+
+    const renamed = await request(app.getHttpServer())
+      .put(`/api/v1/roles/${roleId}`)
+      .set(auth(admin.accessToken))
+      .send({
+        name: 'Senior Branch Accountant',
+        description: 'Updated branch accounting',
+      })
+      .expect(200);
+    expect(renamed.body.data.key).toBe('branch_accountant');
+    expect(
+      renamed.body.data.permissions.map(
+        (permission: { key: string }) => permission.key,
+      ),
+    ).toEqual(['expense_categories.read', 'expenses.read']);
+
+    const preserved = await connection.collection('roles').findOne({
+      _id: legacy.insertedId,
+    });
+    expect(preserved?.key).toBe('branch_accountant');
+    expect(preserved?.permissions).toEqual(['ACCOUNT_VIEW']);
+
+    const removed = await request(app.getHttpServer())
+      .put(`/api/v1/roles/${roleId}/permissions`)
+      .set(auth(admin.accessToken))
+      .send({ permissionKeys: ['expenses.read'] })
+      .expect(200);
+    expect(removed.body.message).not.toBe('Role permission not found');
+    expect(
+      removed.body.data.map((permission: { key: string }) => permission.key),
+    ).toEqual(['expenses.read']);
+
+    const afterRemoval = await request(app.getHttpServer())
+      .get(`/api/v1/roles/${roleId}`)
+      .set(auth(admin.accessToken))
+      .expect(200);
+    expect(afterRemoval.body.data.key).toBe('branch_accountant');
+    expect(
+      afterRemoval.body.data.permissions.map(
+        (permission: { key: string }) => permission.key,
+      ),
+    ).toEqual(['expenses.read']);
+    const storedAfterRemoval = await connection.collection('roles').findOne({
+      _id: legacy.insertedId,
+    });
+    expect(storedAfterRemoval?.permissions).toBeUndefined();
+    expect(storedAfterRemoval?.key).toBe('branch_accountant');
+
+    const added = await request(app.getHttpServer())
+      .put(`/api/v1/roles/${roleId}/permissions`)
+      .set(auth(admin.accessToken))
+      .send({
+        permissionKeys: ['expenses.read', 'expense_categories.read'],
+      })
+      .expect(200);
+    expect(
+      added.body.data.map((permission: { key: string }) => permission.key),
+    ).toEqual(['expense_categories.read', 'expenses.read']);
+
+    const persisted = await request(app.getHttpServer())
+      .get(`/api/v1/roles/${roleId}`)
+      .set(auth(admin.accessToken))
+      .expect(200);
+    expect(persisted.body.data.key).toBe('branch_accountant');
+    expect(
+      persisted.body.data.permissions.map(
+        (permission: { key: string }) => permission.key,
+      ),
+    ).toEqual(['expense_categories.read', 'expenses.read']);
+
+    const unknown = await request(app.getHttpServer())
+      .put(`/api/v1/roles/${roleId}/permissions`)
+      .set(auth(admin.accessToken))
+      .send({ permissionKeys: ['missing.permission'] })
+      .expect(400);
+    expect(unknown.body.message).toBe(
+      'Unknown permission: missing.permission',
+    );
+    const unchanged = await request(app.getHttpServer())
+      .get(`/api/v1/roles/${roleId}`)
+      .set(auth(admin.accessToken))
+      .expect(200);
+    expect(
+      unchanged.body.data.permissions.map(
+        (permission: { key: string }) => permission.key,
+      ),
+    ).toEqual(['expense_categories.read', 'expenses.read']);
+
+    const readerRole = await request(app.getHttpServer())
+      .post('/api/v1/roles')
+      .set(auth(admin.accessToken))
+      .send({ name: 'Expense Only', description: 'Reads expenses' })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/api/v1/roles/${readerRole.body.data.id}/permissions`)
+      .set(auth(admin.accessToken))
+      .send({ permissionKey: 'expenses.read' })
+      .expect(201);
+    const readerUser = await request(app.getHttpServer())
+      .post('/api/v1/users')
+      .set(auth(admin.accessToken))
+      .send({
+        name: 'Expense Only',
+        email: 'expense-only@example.com',
+        password: 'SecurePassword123',
+      })
+      .expect(201);
+    await request(app.getHttpServer())
+      .post(`/api/v1/users/${readerUser.body.data.id}/roles`)
+      .set(auth(admin.accessToken))
+      .send({ roleId: readerRole.body.data.id })
+      .expect(201);
+
+    const reader = await login('expense-only@example.com', 'SecurePassword123');
+    await request(app.getHttpServer())
+      .put(`/api/v1/roles/${roleId}`)
+      .set(auth(reader.accessToken))
+      .send({
+        name: 'Hijacked',
+        description: 'Should not apply',
+      })
+      .expect(403);
+    await request(app.getHttpServer())
+      .put(`/api/v1/roles/${roleId}/permissions`)
+      .set(auth(reader.accessToken))
+      .send({ permissionKeys: ['expenses.read'] })
+      .expect(403);
+
+    const stillProtected = await request(app.getHttpServer())
+      .get(`/api/v1/roles/${roleId}`)
+      .set(auth(admin.accessToken))
+      .expect(200);
+    expect(stillProtected.body.data.name).toBe('Senior Branch Accountant');
+    expect(stillProtected.body.data.key).toBe('branch_accountant');
+    expect(
+      stillProtected.body.data.permissions.map(
+        (permission: { key: string }) => permission.key,
+      ),
+    ).toEqual(['expense_categories.read', 'expenses.read']);
   });
 });
