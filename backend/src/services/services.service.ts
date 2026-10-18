@@ -31,8 +31,11 @@ export class ServicesService {
     return {
       id,
       title: document.title,
+      short: document.short ?? '',
       description: document.description,
       icon: document.icon,
+      capabilities: document.capabilities ?? [],
+      benefits: document.benefits ?? [],
       image: document.image
         ? {
             url: document.image.url,
@@ -40,10 +43,20 @@ export class ServicesService {
           }
         : null,
       order: document.order,
+      isVisible: document.isVisible !== false,
     };
   }
 
   async findAll(): Promise<ServiceResponse[]> {
+    const services = await this.serviceModel
+      .find({ isVisible: { $ne: false } })
+      .sort({ order: 1, createdAt: 1, _id: 1 })
+      .exec();
+
+    return services.map((service) => this.toResponse(service));
+  }
+
+  async findAllAdmin(): Promise<ServiceResponse[]> {
     const services = await this.serviceModel
       .find()
       .sort({ order: 1, createdAt: 1, _id: 1 })
@@ -53,6 +66,11 @@ export class ServicesService {
   }
 
   async findOne(id: string): Promise<ServiceResponse> {
+    const service = await this.findVisibleDocumentById(id);
+    return this.toResponse(service);
+  }
+
+  async findOneAdmin(id: string): Promise<ServiceResponse> {
     const service = await this.findDocumentById(id);
     return this.toResponse(service);
   }
@@ -60,9 +78,13 @@ export class ServicesService {
   async create(createServiceDto: CreateServiceDto): Promise<ServiceResponse> {
     const created = await this.serviceModel.create({
       title: createServiceDto.title,
+      short: createServiceDto.short ?? '',
       description: createServiceDto.description,
       icon: createServiceDto.icon,
+      capabilities: createServiceDto.capabilities ?? [],
+      benefits: createServiceDto.benefits ?? [],
       order: createServiceDto.order,
+      isVisible: createServiceDto.isVisible ?? true,
       image: null,
     });
 
@@ -80,14 +102,26 @@ export class ServicesService {
     if (updateServiceDto.title !== undefined) {
       update.title = updateServiceDto.title;
     }
+    if (updateServiceDto.short !== undefined) {
+      update.short = updateServiceDto.short;
+    }
     if (updateServiceDto.description !== undefined) {
       update.description = updateServiceDto.description;
     }
     if (updateServiceDto.icon !== undefined) {
       update.icon = updateServiceDto.icon;
     }
+    if (updateServiceDto.capabilities !== undefined) {
+      update.capabilities = updateServiceDto.capabilities;
+    }
+    if (updateServiceDto.benefits !== undefined) {
+      update.benefits = updateServiceDto.benefits;
+    }
     if (updateServiceDto.order !== undefined) {
       update.order = updateServiceDto.order;
+    }
+    if (updateServiceDto.isVisible !== undefined) {
+      update.isVisible = updateServiceDto.isVisible;
     }
 
     const updated = await this.serviceModel
@@ -169,6 +203,21 @@ export class ServicesService {
     await service.save();
 
     return this.toResponse(service);
+  }
+
+  private async findVisibleDocumentById(id: string): Promise<ServiceDocument> {
+    if (!isValidObjectId(id)) {
+      throw new NotFoundException('Service not found');
+    }
+
+    const service = await this.serviceModel
+      .findOne({ _id: id, isVisible: { $ne: false } })
+      .exec();
+    if (!service) {
+      throw new NotFoundException('Service not found');
+    }
+
+    return service;
   }
 
   private async findDocumentById(id: string): Promise<ServiceDocument> {

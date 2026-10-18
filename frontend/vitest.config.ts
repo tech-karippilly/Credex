@@ -1,9 +1,13 @@
+
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    allowedHosts: ["credexfin.com", "www.credexfin.com"],
+  },
   test: {
     environment: "jsdom",
     globals: true,

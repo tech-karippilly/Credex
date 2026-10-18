@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { AuthModule } from '../auth/auth.module';
+import { RbacModule } from '../rbac/rbac.module';
 import { Expense, ExpenseSchema } from '../expenses/schemas/expense.schema';
 import { ExpenseCategoriesController } from './expense-categories.controller';
 import { ExpenseCategoriesService } from './expense-categories.service';
@@ -16,6 +17,7 @@ import {
       { name: Expense.name, schema: ExpenseSchema },
     ]),
     AuthModule,
+    RbacModule,
   ],
   controllers: [ExpenseCategoriesController],
   providers: [ExpenseCategoriesService],

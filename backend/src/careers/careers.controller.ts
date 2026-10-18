@@ -9,8 +9,12 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  RequirePermissions,
+  RequirePermissionsWhenPresent,
+} from '../rbac/decorators/require-permissions.decorator';
+import { PermissionsGuard } from '../rbac/guards/permissions.guard';
 import { CareersService } from './careers.service';
 import { CreateCareerDto } from './dto/create-career.dto';
 import { UpdateCareerDto } from './dto/update-career.dto';
@@ -21,7 +25,8 @@ export class CareersController {
   constructor(private readonly careersService: CareersService) {}
 
   @Get('admin')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('careers.read')
   async findAllAdmin() {
     const data = await this.careersService.findAllAdmin();
 
@@ -33,7 +38,8 @@ export class CareersController {
   }
 
   @Get('admin/:id')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('careers.read')
   async findOneAdmin(@Param('id') id: string) {
     const data = await this.careersService.findOneAdmin(id);
 
@@ -67,7 +73,8 @@ export class CareersController {
   }
 
   @Post()
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('careers.create')
   async create(@Body() createCareerDto: CreateCareerDto) {
     const data = await this.careersService.create(createCareerDto);
 
@@ -79,7 +86,9 @@ export class CareersController {
   }
 
   @Put(':id')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('careers.update')
+  @RequirePermissionsWhenPresent('isVisible', 'careers.status.update')
   async update(
     @Param('id') id: string,
     @Body() updateCareerDto: UpdateCareerDto,
@@ -94,7 +103,8 @@ export class CareersController {
   }
 
   @Patch(':id/visibility')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('careers.status.update')
   async updateVisibility(
     @Param('id') id: string,
     @Body() updateCareerVisibilityDto: UpdateCareerVisibilityDto,
@@ -112,7 +122,8 @@ export class CareersController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('careers.delete')
   async remove(@Param('id') id: string) {
     await this.careersService.remove(id);
 

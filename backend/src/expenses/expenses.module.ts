@@ -3,6 +3,7 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { ExpenseCategoriesModule } from '../expense-categories/expense-categories.module';
 import { AiModule } from '../ai/ai.module';
 import { AuthModule } from '../auth/auth.module';
+import { RbacModule } from '../rbac/rbac.module';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { ExpensesController } from './expenses.controller';
 import { ExpensesService } from './expenses.service';
@@ -17,6 +18,7 @@ import { ReceiptAiService } from './services/receipt-ai.service';
     CloudinaryModule,
     AiModule,
     AuthModule,
+    RbacModule,
     ExpenseCategoriesModule,
   ],
   controllers: [ExpensesController],

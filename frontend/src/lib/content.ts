@@ -10,6 +10,8 @@ export const contentQuery = queryOptions({
   queryKey: ["site-content"],
   queryFn: () => getSiteContent(),
   staleTime: 60_000,
+  // A rejected content load is deterministic for this request; retrying repeats the same failure.
+  retry: false,
 });
 
 export function useContent() {

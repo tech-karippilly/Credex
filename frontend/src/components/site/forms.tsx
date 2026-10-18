@@ -1,9 +1,9 @@
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { z } from "zod";
 import { CheckCircle2, Loader2, Upload, AlertCircle } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { applicationsApi } from "@/lib/applications-api";
 import { apiErrorMessage } from "@/lib/api";
+import { enquiriesApi } from "@/lib/enquiries-api";
 import { useContent } from "@/lib/content";
 
 type Errors = Partial<Record<"name"|"company"|"email"|"phone"|"service"|"message"|"fullName"|"experience"|"location"|"resume", string>>;
@@ -59,20 +59,41 @@ export function ContactForm() {
   const { services, settings } = useContent();
   const [errors, setErrors] = useState<Errors>({});
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [errorText, setErrorText] = useState<string | null>(null);
+  const submitting = useRef(false);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (submitting.current) return;
     const data = Object.fromEntries(new FormData(e.currentTarget));
     const res = contactSchema.safeParse(data);
     const errs = collectErrors(res);
     setErrors(errs);
-    if (!res.success) return;
+    if (!res.success) {
+      setErrorText(null);
+      setState("idle");
+      return;
+    }
+    submitting.current = true;
     setState("loading");
+    setErrorText(null);
     const d = res.data;
-    const { error } = await supabase.from("enquiries").insert({
-      name: d.name, company: d.company || null, email: d.email, phone: d.phone, service: d.service, message: d.message,
-    });
-    setState(error ? "error" : "done");
+    try {
+      await enquiriesApi.create({
+        name: d.name,
+        email: d.email,
+        phone: d.phone,
+        service: d.service,
+        message: d.message,
+        ...(d.company ? { company: d.company } : {}),
+      });
+      setState("done");
+    } catch (error) {
+      setErrorText(apiErrorMessage(error, "Something went wrong. Please try again."));
+      setState("error");
+    } finally {
+      submitting.current = false;
+    }
   }
 
   if (state === "done")
@@ -101,7 +122,7 @@ export function ContactForm() {
         </Field>
       </div>
       {state === "error" && (
-        <p role="alert" className="flex items-center gap-2 text-sm text-destructive sm:col-span-2"><AlertCircle className="h-4 w-4" /> Something went wrong. Please try again or email {settings.email}.</p>
+        <p role="alert" className="flex items-center gap-2 text-sm text-destructive sm:col-span-2"><AlertCircle className="h-4 w-4 shrink-0" /> {errorText ?? "Something went wrong. Please try again."} You can also email {settings.email}.</p>
       )}
       <div className="sm:col-span-2">
         <button type="submit" disabled={state === "loading"} className="btn btn-primary w-full sm:w-auto">
@@ -126,6 +147,8 @@ export function ApplyForm({ careerId, role }: { careerId: string; role: string }
   const [errors, setErrors] = useState<Errors>({});
   const [file, setFile] = useState<File | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [phase, setPhase] = useState<"saving" | "uploading" | null>(null);
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -142,26 +165,38 @@ export function ApplyForm({ careerId, role }: { careerId: string; role: string }
     setState("loading");
     setErrorText(null);
     const d = res.data;
+    let id = createdId;
     try {
-      const created = await applicationsApi.create({
-        careerId,
-        name: d.fullName,
-        email: d.email,
-        phone: d.phone,
-        experience: d.experience,
-        location: d.location,
-        ...(d.message ? { coverLetter: d.message } : {}),
-      });
-      await applicationsApi.uploadResume(created.id, file);
+      if (!id) {
+        setPhase("saving");
+        const created = await applicationsApi.create({
+          careerId,
+          name: d.fullName,
+          email: d.email,
+          phone: d.phone,
+          experience: d.experience,
+          location: d.location,
+          ...(d.message ? { coverLetter: d.message } : {}),
+        });
+        id = created.id;
+        setCreatedId(id);
+      }
+      setPhase("uploading");
+      await applicationsApi.uploadResume(id, file);
       setState("done");
     } catch (error) {
-      setErrorText(apiErrorMessage(error, "Something went wrong. Please try again."));
+      const detail = apiErrorMessage(error, "Something went wrong. Please try again.");
+      setErrorText(id
+        ? `Your application was saved, but the resume did not upload. ${detail} Submit again to retry the upload without creating another application.`
+        : detail);
       setState("error");
+    } finally {
+      setPhase(null);
     }
   }
 
   if (state === "done")
-    return <Success title="Application submitted." text={`Thank you for applying for the ${role} role. Our HR team will review your profile and contact you if shortlisted.`} onReset={() => { setFile(null); setState("idle"); }} />;
+    return <Success title="Application submitted." text={`Thank you for applying for the ${role} role. Our HR team will review your profile and contact you if shortlisted.`} onReset={() => { setFile(null); setCreatedId(null); setState("idle"); }} />;
 
   const inv = (k: keyof Errors) => ({ "aria-invalid": !!errors[k], "aria-describedby": errors[k] ? `${k}-error` : undefined });
 
@@ -176,7 +211,7 @@ export function ApplyForm({ careerId, role }: { careerId: string; role: string }
         <Field id="resume" label="Resume" required error={errors.resume}>
           <label htmlFor="resume" className="flex cursor-pointer items-center gap-3 rounded-lg border border-dashed border-input bg-surface px-4 py-5 text-sm hover:border-primary focus-within:border-primary">
             <Upload className="h-5 w-5 text-primary" />
-            <span className="text-muted-foreground">{file ? <span className="font-medium text-foreground">{file.name}</span> : "Upload PDF or Word document (max 5 MB)"}</span>
+            <span className="text-muted-foreground">{file ? <span className="font-medium text-foreground">{file.name}</span> : "Upload PDF or Word document (max 10 MB)"}</span>
             <input id="resume" name="resume" type="file" accept=".pdf,.doc,.docx" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] ?? null)} {...inv("resume")} />
           </label>
         </Field>
@@ -189,7 +224,7 @@ export function ApplyForm({ careerId, role }: { careerId: string; role: string }
       )}
       <div className="sm:col-span-2">
         <button type="submit" disabled={state === "loading"} className="btn btn-primary w-full sm:w-auto">
-          {state === "loading" ? <><Loader2 className="h-4 w-4 animate-spin" /> Submitting…</> : "Submit Application"}
+          {state === "loading" ? <><Loader2 className="h-4 w-4 animate-spin" /> {phase === "uploading" ? "Uploading resume…" : "Saving application…"}</> : createdId ? "Retry resume upload" : "Submit Application"}
         </button>
       </div>
     </form>

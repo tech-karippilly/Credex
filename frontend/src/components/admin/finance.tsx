@@ -1,26 +1,22 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Loader2, Plus, Trash2, Download, Printer, Receipt, Upload, Pencil, Eye, Mail, MessageCircle } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Download, Loader2, Pencil, Plus, Receipt, Trash2, Upload } from "lucide-react";
 import { apiErrorMessage } from "@/lib/api";
-import { expensesApi, type Expense } from "@/lib/expenses-api";
 import {
-  vouchersApi,
-  type PaymentMode,
-  type Voucher,
-  type VoucherStatus,
-  type VoucherType,
-} from "@/lib/vouchers-api";
-import { company as COMPANY, LOGO_URL } from "@/lib/site";
-const inr = (n: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(n));
-const day = (d: string) => new Date(d).toLocaleDateString("en-IN", { dateStyle: "medium" });
+  clampPage,
+  dateRangeError,
+  formatAmountInput,
+  formatLedgerDate,
+  localCalendarDate,
+  parseExpenseAmount,
+  receiptFileError,
+} from "@/lib/expense-form";
+import { expensesApi, type Expense, type ExpenseCategory } from "@/lib/expenses-api";
+import { useCan } from "./admin-access";
+import { LedgerPagination } from "./ledger-pagination";
 
-function Head({ title, text }: { title: string; text: string }) {
-  return (
-    <div className="mb-8">
-      <h1 className="text-3xl font-semibold">{title}</h1>
-      <p className="mt-2 text-muted-foreground">{text}</p>
-    </div>
-  );
-}
+export { VouchersPanel, type VoucherDraft } from "./vouchers-panel";
+
+const inr = (n: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(n));
 function L({ id, label, children }: { id: string; label: string; children: ReactNode }) {
   return <div><label htmlFor={id} className="mb-2 block text-sm font-semibold">{label}</label>{children}</div>;
 }
@@ -30,60 +26,285 @@ function Spin() {
 
 /* ---------------- expenses ---------------- */
 
+type ExpenseDraft = {
+  expenseName: string;
+  categoryId: string;
+  paidBy: string;
+  amount: string;
+  date: string;
+  notes: string;
+};
+
+type ExpenseField = "expenseName" | "categoryId" | "paidBy" | "amount" | "date" | "receipt";
+
+function emptyExpenseDraft(): ExpenseDraft {
+  return {
+    expenseName: "",
+    categoryId: "",
+    paidBy: "",
+    amount: "",
+    date: localCalendarDate(),
+    notes: "",
+  };
+}
+
+function validateExpenseDraft(
+  draft: ExpenseDraft,
+  file: File | null,
+): Partial<Record<ExpenseField, string>> {
+  const errors: Partial<Record<ExpenseField, string>> = {};
+  if (!draft.expenseName.trim()) errors.expenseName = "Expense name is required.";
+  if (!draft.categoryId) errors.categoryId = "Category is required.";
+  if (!draft.paidBy.trim()) errors.paidBy = "Paid by is required.";
+  const amount = parseExpenseAmount(draft.amount);
+  if (!amount.ok) errors.amount = amount.message;
+  if (!draft.date) errors.date = "Date is required.";
+  if (file) {
+    const receiptError = receiptFileError(file);
+    if (receiptError) errors.receipt = receiptError;
+  }
+  return errors;
+}
+
+function FieldError({ id, message }: { id: string; message?: string }) {
+  if (!message) return null;
+  return <p id={id} className="mt-1 text-sm text-destructive">{message}</p>;
+}
+
 export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }) {
+  const can = useCan();
   const [rows, setRows] = useState<Expense[] | null>(null);
-  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
-  const [filter, setFilter] = useState("All");
+  const [categories, setCategories] = useState<ExpenseCategory[]>([]);
+  const [categoriesError, setCategoriesError] = useState<string | null>(null);
+  const [categoriesLoading, setCategoriesLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState<number>(20);
+  const [categoryId, setCategoryId] = useState("");
+  const [dateDraft, setDateDraft] = useState({ from: "", to: "" });
+  const [appliedFrom, setAppliedFrom] = useState("");
+  const [appliedTo, setAppliedTo] = useState("");
+  const [filterError, setFilterError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+  const [listError, setListError] = useState<string | null>(null);
+  const [totalAmount, setTotalAmount] = useState(0);
+  const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
+  const [reloadToken, setReloadToken] = useState(0);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [draft, setDraft] = useState<ExpenseDraft>(emptyExpenseDraft);
   const [file, setFile] = useState<File | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<ExpenseField, string>>>({});
+  const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [existingReceipt, setExistingReceipt] = useState<Expense["receipt"]>(null);
+  const [removeReceipt, setRemoveReceipt] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<{ id: string; name: string } | null>(null);
+  const saveLock = useRef(false);
 
-  const load = useCallback(() => {
-    setLoading(true);
-    const categoryId = filter === "All" ? undefined : filter;
-    Promise.all([
-      expensesApi.list({ limit: 100, categoryId }),
-      expensesApi.listCategories(),
-    ])
-      .then(([list, cats]) => {
-        setRows(list.items);
-        setCategories(cats);
+  const refreshList = useCallback(() => setReloadToken((token) => token + 1), []);
+
+  const loadCategories = useCallback(() => {
+    setCategoriesLoading(true);
+    setCategoriesError(null);
+    expensesApi.listCategories()
+      .then(setCategories)
+      .catch((error) => {
+        setCategories([]);
+        setCategoriesError(apiErrorMessage(error, "Could not load categories."));
       })
-      .catch(() => setRows([]))
-      .finally(() => setLoading(false));
-  }, [filter]);
-  useEffect(load, [load]);
+      .finally(() => setCategoriesLoading(false));
+  }, []);
 
-  async function add(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const fd = new FormData(form); const g = (k: string) => String(fd.get(k) ?? "");
-    const f = { name: g("name"), categoryId: g("categoryId"), paid_by: g("paid_by"), amount: g("amount"), expense_date: g("expense_date"), notes: g("notes") };
-    const amount = Number(f.amount);
-    if (!f.name.trim() || !f.paid_by.trim() || !f.categoryId || !(amount > 0)) { setMsg("Please fill name, category, who paid and a valid amount."); return; }
-    setBusy(true); setMsg(null);
-    try {
-      const created = await expensesApi.create({
-        expenseName: f.name.trim(),
-        categoryId: f.categoryId,
-        paidBy: f.paid_by.trim(),
-        amount,
-        date: f.expense_date || new Date().toISOString().slice(0, 10),
-        notes: f.notes.trim() || undefined,
+  useEffect(() => {
+    loadCategories();
+  }, [loadCategories]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let redirecting = false;
+    setLoading(true);
+    setListError(null);
+    expensesApi.list({
+      page,
+      limit,
+      categoryId: categoryId || undefined,
+      from: appliedFrom || undefined,
+      to: appliedTo || undefined,
+    })
+      .then((list) => {
+        if (cancelled) return;
+        const nextPage = clampPage(page, list.pagination.totalPages);
+        if (nextPage !== page) {
+          redirecting = true;
+          setPage(nextPage);
+          return;
+        }
+        setRows(list.items);
+        setTotalAmount(list.totalAmount);
+        setPagination(list.pagination);
+        setLoaded(true);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        setRows(null);
+        setListError(apiErrorMessage(error, "Could not load expenses."));
+      })
+      .finally(() => {
+        if (!cancelled && !redirecting) setLoading(false);
       });
-      if (file) {
+    return () => {
+      cancelled = true;
+    };
+  }, [page, limit, categoryId, appliedFrom, appliedTo, reloadToken]);
+
+  function applyDateFilters() {
+    const rangeError = dateRangeError(dateDraft.from, dateDraft.to);
+    if (rangeError) {
+      setFilterError(rangeError);
+      return;
+    }
+    setFilterError(null);
+    setNotice(null);
+    setAppliedFrom(dateDraft.from);
+    setAppliedTo(dateDraft.to);
+    setPage(1);
+  }
+
+  function clearFilters() {
+    setDateDraft({ from: "", to: "" });
+    setAppliedFrom("");
+    setAppliedTo("");
+    setCategoryId("");
+    setFilterError(null);
+    setNotice(null);
+    setPage(1);
+  }
+
+  function resetExpenseEditor() {
+    setEditingId(null);
+    setExistingReceipt(null);
+    setRemoveReceipt(false);
+    setEditingCategory(null);
+    setDraft(emptyExpenseDraft());
+    setFile(null);
+    setFieldErrors({});
+    setFormError(null);
+  }
+
+  function openForm() {
+    resetExpenseEditor();
+    setNotice(null);
+    setFormOpen(true);
+  }
+
+  function openEdit(expense: Expense) {
+    setEditingId(expense.id);
+    setExistingReceipt(expense.receipt);
+    setRemoveReceipt(false);
+    setEditingCategory(expense.category);
+    setDraft({
+      expenseName: expense.expenseName,
+      categoryId: expense.categoryId,
+      paidBy: expense.paidBy,
+      amount: formatAmountInput(expense.amount),
+      date: expense.date.slice(0, 10),
+      notes: expense.notes ?? "",
+    });
+    setFile(null);
+    setFieldErrors({});
+    setFormError(null);
+    setNotice(null);
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    resetExpenseEditor();
+  }
+
+  function chooseReceipt(next: File | null) {
+    setFile(next);
+    if (next) setRemoveReceipt(false);
+    setFieldErrors((current) => ({
+      ...current,
+      receipt: next ? receiptFileError(next) ?? undefined : undefined,
+    }));
+  }
+
+  async function saveExpense(event: React.FormEvent) {
+    event.preventDefault();
+    if (busy || saveLock.current) return;
+    const errors = validateExpenseDraft(draft, file);
+    setFieldErrors(errors);
+    setFormError(null);
+    if (Object.keys(errors).length > 0) return;
+
+    const amount = parseExpenseAmount(draft.amount);
+    if (!amount.ok) return;
+
+    const payload = {
+      expenseName: draft.expenseName.trim(),
+      categoryId: draft.categoryId,
+      paidBy: draft.paidBy.trim(),
+      amount: amount.amount,
+      date: draft.date,
+      notes: editingId ? draft.notes.trim() : draft.notes.trim() || undefined,
+    };
+    const receiptFile = file;
+    const shouldRemoveReceipt = Boolean(editingId && removeReceipt && existingReceipt && !receiptFile);
+    const expenseId = editingId;
+
+    saveLock.current = true;
+    setBusy(true);
+    try {
+      if (expenseId) {
+        await expensesApi.update(expenseId, payload);
         try {
-          await expensesApi.uploadReceipt(created.id, file);
+          if (receiptFile) {
+            await expensesApi.uploadReceipt(expenseId, receiptFile);
+          } else if (shouldRemoveReceipt) {
+            await expensesApi.deleteReceipt(expenseId);
+          }
+        } catch (receiptError) {
+          closeForm();
+          setNotice({
+            ok: false,
+            text: receiptFile
+              ? `Expense updated, but the receipt could not be replaced. The other changes were saved, and the previous receipt was kept. ${apiErrorMessage(receiptError, "Receipt upload failed.")}`
+              : `Expense updated, but the receipt could not be removed. The other changes were saved. ${apiErrorMessage(receiptError, "Receipt removal failed.")}`,
+          });
+          refreshList();
+          return;
+        }
+        closeForm();
+        setNotice({ ok: true, text: "Expense updated." });
+        refreshList();
+        return;
+      }
+
+      const created = await expensesApi.create(payload);
+      if (receiptFile) {
+        try {
+          await expensesApi.uploadReceipt(created.id, receiptFile);
         } catch (uploadError) {
-          await expensesApi.delete(created.id).catch(() => {});
-          throw uploadError;
+          closeForm();
+          setNotice({
+            ok: false,
+            text: `Expense saved, but the receipt could not be uploaded. The expense was kept without a receipt. ${apiErrorMessage(uploadError, "Receipt upload failed.")}`,
+          });
+          refreshList();
+          return;
         }
       }
-      form.reset(); setFile(null); setMsg("Expense saved."); load();
+      closeForm();
+      setNotice({ ok: true, text: "Expense saved." });
+      refreshList();
     } catch (error) {
-      setMsg(apiErrorMessage(error, file ? "Receipt upload failed." : "Could not save expense."));
+      setFormError(apiErrorMessage(error, expenseId ? "Could not update expense." : "Could not save expense."));
     } finally {
+      saveLock.current = false;
       setBusy(false);
     }
   }
@@ -91,492 +312,136 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
   function openReceipt(url: string) {
     window.open(url, "_blank", "noopener");
   }
-  async function del(x: Expense) {
-    if (!confirm(`Delete expense "${x.expenseName}"?`)) return;
+
+  async function del(expense: Expense) {
+    if (!confirm(`Delete expense "${expense.expenseName}"?`)) return;
+    setNotice(null);
     try {
-      await expensesApi.delete(x.id);
-      load();
+      await expensesApi.delete(expense.id);
+      setNotice({ ok: true, text: "Expense deleted." });
+      refreshList();
     } catch (error) {
-      setMsg(apiErrorMessage(error, "Could not delete expense."));
+      setNotice({ ok: false, text: apiErrorMessage(error, "Could not delete expense.") });
     }
   }
 
-  const shown = rows ?? [];
-  const total = shown.reduce((s, r) => s + Number(r.amount), 0);
-  const noCategories = categories.length === 0;
+  const filtersActive = Boolean(categoryId || appliedFrom || appliedTo);
+  const recordLabel = `${pagination.total} expense ${pagination.total === 1 ? "record" : "records"} match the current filters.`;
 
   return (
     <>
-      <Head title="Expenses" text="Record company expenses with receipts." />
-      {noCategories && (
-        <div className="card-site mb-6 p-6 text-sm text-muted-foreground">
-          No expense categories available. Create a category to add an expense.
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold">Expenses</h1>
+          <p className="mt-2 text-muted-foreground">
+            {listError
+              ? "Expense records could not be loaded."
+              : loaded
+                ? recordLabel
+                : "Loading expenses…"}
+          </p>
         </div>
-      )}
-      <form onSubmit={add} className="card-site grid gap-5 p-6 md:grid-cols-2">
-        <L id="x-name" label="Expense name *"><input id="x-name" name="name" className="field" placeholder="e.g. AWS hosting – October" /></L>
-        <L id="x-cat" label="Category *">
-          <select id="x-cat" name="categoryId" className="field" required disabled={noCategories} defaultValue={categories[0]?.id ?? ""}>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </L>
-        <L id="x-paid" label="Who paid *"><input id="x-paid" name="paid_by" className="field" placeholder="Person or Company account" /></L>
-        <L id="x-amt" label="Amount (INR) *"><input id="x-amt" name="amount" type="number" step="0.01" min="0" className="field" /></L>
-        <L id="x-date" label="Date"><input id="x-date" name="expense_date" type="date" className="field" defaultValue={new Date().toISOString().slice(0, 10)} /></L>
-        <L id="x-rec" label="Receipt">
-          <label htmlFor="x-rec" className="field flex cursor-pointer items-center gap-2 text-sm">
-            <Upload className="h-4 w-4 text-primary" /><span className="truncate text-muted-foreground">{file ? file.name : "Upload image or PDF (max 10 MB)"}</span>
-            <input id="x-rec" type="file" accept="image/*,.pdf" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </label>
-        </L>
-        <div className="md:col-span-2"><L id="x-notes" label="Notes"><textarea id="x-notes" name="notes" rows={2} className="field h-auto py-3" /></L></div>
-        <div className="flex items-center gap-4 md:col-span-2">
-          <button disabled={busy || noCategories} className="btn btn-primary">{busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}Add expense</button>
-          {msg && <p role="status" className="text-sm text-muted-foreground">{msg}</p>}
-        </div>
-      </form>
-
-      <div className="mt-10 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={() => setFilter("All")} className={`btn h-9 px-4 text-sm ${filter === "All" ? "btn-primary" : "btn-outline"}`}>All</button>
-          {categories.map((c) => (
-            <button key={c.id} type="button" onClick={() => setFilter(c.id)} className={`btn h-9 px-4 text-sm ${filter === c.id ? "btn-primary" : "btn-outline"}`}>{c.name}</button>
-          ))}
-        </div>
-        <p className="text-sm">Total: <span className="font-semibold">{inr(total)}</span></p>
+        {can("expenses.create") && (
+        <button type="button" className="btn btn-primary shrink-0" onClick={openForm}>
+          <Plus className="h-4 w-4" />
+          Add Expense
+        </button>
+        )}
       </div>
 
-      {loading ? <Spin /> : shown.length === 0 ? (
-        <div className="card-site mt-4 p-10 text-center text-muted-foreground">No expenses yet.</div>
-      ) : (
-        <div className="card-site mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
-              <tr><th className="p-4">Date</th><th className="p-4">Expense</th><th className="p-4">Category</th><th className="p-4">Paid by</th><th className="p-4 text-right">Amount</th><th className="p-4" /></tr>
-            </thead>
-            <tbody>
-              {shown.map((r) => (
-                <tr key={r.id} className="border-b border-border last:border-0">
-                  <td className="whitespace-nowrap p-4">{day(r.date)}</td>
-                  <td className="p-4"><div className="font-medium">{r.expenseName}</div>{r.notes && <div className="text-xs text-muted-foreground">{r.notes}</div>}</td>
-                  <td className="p-4">{r.category.name}</td>
-                  <td className="p-4">{r.paidBy}</td>
-                  <td className="whitespace-nowrap p-4 text-right font-semibold">{inr(Number(r.amount))}</td>
-                  <td className="p-4">
-                    <div className="flex justify-end gap-1">
-                      {r.receipt?.url && <button title="Receipt" aria-label="View receipt" onClick={() => openReceipt(r.receipt!.url)} className="btn btn-outline h-8 px-2"><Download className="h-4 w-4" /></button>}
-                      <button title="Create voucher" aria-label="Create voucher" onClick={() => onVoucher(r)} className="btn btn-outline h-8 px-2"><Receipt className="h-4 w-4" /></button>
-                      <button title="Delete" aria-label="Delete expense" onClick={() => del(r)} className="btn btn-outline h-8 px-2 text-destructive"><Trash2 className="h-4 w-4" /></button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+      {notice && (
+        <p role="status" className={`mb-4 text-sm ${notice.ok ? "text-success" : "text-destructive"}`}>{notice.text}</p>
       )}
-    </>
-  );
-}
 
-/* ---------------- vouchers ---------------- */
-
-const VOUCHER_TYPES: { value: VoucherType; label: string }[] = [
-  { value: "PAYMENT", label: "Payment" },
-  { value: "RECEIPT", label: "Receipt" },
-  { value: "GENERAL", label: "General" },
-];
-
-const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
-  { value: "CASH", label: "Cash" },
-  { value: "BANK_TRANSFER", label: "Bank transfer" },
-  { value: "UPI", label: "UPI" },
-  { value: "CARD", label: "Card" },
-  { value: "CHEQUE", label: "Cheque" },
-  { value: "OTHER", label: "Other" },
-];
-
-const VOUCHER_STATUSES: { value: VoucherStatus; label: string }[] = [
-  { value: "DRAFT", label: "Draft" },
-  { value: "COMPLETED", label: "Completed" },
-  { value: "CANCELLED", label: "Cancelled" },
-];
-
-const emptyVoucherForm = () => ({
-  voucherDate: new Date().toISOString().slice(0, 10),
-  voucherType: "PAYMENT" as VoucherType,
-  title: "",
-  description: "",
-  paidBy: "",
-  payee: "",
-  amount: "",
-  paymentMode: "BANK_TRANSFER" as PaymentMode,
-  categoryId: "",
-  expenseId: "",
-  referenceNumber: "",
-  notes: "",
-});
-
-export type VoucherDraft = ReturnType<typeof emptyVoucherForm> & {
-  expenseId: string;
-};
-
-export function VouchersPanel({ draft }: { draft: Partial<VoucherDraft> | null }) {
-  const [rows, setRows] = useState<Voucher[] | null>(null);
-  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [form, setForm] = useState(emptyVoucherForm());
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingNumber, setEditingNumber] = useState<string | null>(null);
-  const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [filterType, setFilterType] = useState<VoucherType | "">("");
-  const [filterStatus, setFilterStatus] = useState<VoucherStatus | "">("");
-  const [shareModal, setShareModal] = useState<"email" | "whatsapp" | null>(null);
-  const [shareVoucher, setShareVoucher] = useState<Voucher | null>(null);
-  const [shareEmail, setShareEmail] = useState("");
-  const [sharePhone, setSharePhone] = useState("");
-  const [shareMessage, setShareMessage] = useState("");
-  const [shareBusy, setShareBusy] = useState(false);
-  const [shareError, setShareError] = useState("");
-
-  const load = useCallback(() => {
-    setLoading(true);
-    Promise.all([
-      vouchersApi.list({
-        limit: 100,
-        search: search.trim() || undefined,
-        voucherType: filterType || undefined,
-        status: filterStatus || undefined,
-      }),
-      expensesApi.listCategories(),
-      expensesApi.list({ limit: 100 }),
-    ])
-      .then(([list, cats, expenseList]) => {
-        setRows(list.items);
-        setCategories(cats);
-        setExpenses(expenseList.items);
-      })
-      .catch(() => setRows([]))
-      .finally(() => setLoading(false));
-  }, [search, filterType, filterStatus]);
-
-  useEffect(load, [load]);
-
-  useEffect(() => {
-    if (!draft) return;
-    setForm((prev) => ({
-      ...prev,
-      ...draft,
-      expenseId: draft.expenseId ?? prev.expenseId,
-      categoryId: draft.categoryId ?? prev.categoryId,
-      amount: draft.amount ?? prev.amount,
-    }));
-    setEditingId(null);
-    setEditingNumber(null);
-  }, [draft]);
-
-  function resetForm() {
-    setForm(emptyVoucherForm());
-    setEditingId(null);
-    setEditingNumber(null);
-    setFile(null);
-  }
-
-  function startEdit(voucher: Voucher) {
-    setEditingId(voucher.id);
-    setEditingNumber(voucher.voucherNumber);
-    setFile(null);
-    setForm({
-      voucherDate: voucher.voucherDate,
-      voucherType: voucher.voucherType,
-      title: voucher.title,
-      description: voucher.description,
-      paidBy: voucher.paidBy,
-      payee: voucher.payee,
-      amount: String(voucher.amount),
-      paymentMode: voucher.paymentMode,
-      categoryId: voucher.categoryId ?? "",
-      expenseId: voucher.expenseId ?? "",
-      referenceNumber: voucher.referenceNumber,
-      notes: voucher.notes,
-    });
-  }
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    const amount = Number(form.amount);
-    if (
-      !form.title.trim() ||
-      !form.paidBy.trim() ||
-      !form.payee.trim() ||
-      !(amount > 0)
-    ) {
-      setMsg("Please fill required fields and a valid amount.");
-      return;
-    }
-
-    setBusy(true);
-    setMsg(null);
-    const payload = {
-      voucherDate: form.voucherDate,
-      voucherType: form.voucherType,
-      title: form.title.trim(),
-      description: form.description.trim() || undefined,
-      paidBy: form.paidBy.trim(),
-      payee: form.payee.trim(),
-      amount,
-      paymentMode: form.paymentMode,
-      categoryId: form.categoryId || undefined,
-      expenseId: form.expenseId || undefined,
-      referenceNumber: form.referenceNumber.trim() || undefined,
-      notes: form.notes.trim() || undefined,
-    };
-
-    try {
-      if (editingId) {
-        await vouchersApi.update(editingId, payload);
-        if (file) await vouchersApi.uploadDocument(editingId, file);
-        setMsg(`Voucher ${editingNumber ?? ""} updated.`);
-        resetForm();
-        load();
-        return;
-      }
-
-      const created = await vouchersApi.create(payload);
-      if (file) {
-        try {
-          await vouchersApi.uploadDocument(created.id, file);
-        } catch (uploadError) {
-          await vouchersApi.delete(created.id).catch(() => {});
-          throw uploadError;
-        }
-      }
-      setMsg(`Voucher ${created.voucherNumber} created.`);
-      resetForm();
-      load();
-      printVoucher(created);
-    } catch (error) {
-      setMsg(apiErrorMessage(error, editingId ? "Could not update voucher." : "Could not create voucher."));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function openShareModal(voucher: Voucher, mode: "email" | "whatsapp") {
-    setShareVoucher(voucher);
-    setShareModal(mode);
-    setShareEmail("");
-    setSharePhone("");
-    setShareMessage(
-      mode === "email"
-        ? "Please find the voucher attached."
-        : "Please find the voucher details.",
-    );
-    setShareError("");
-  }
-
-  function closeShareModal() {
-    setShareModal(null);
-    setShareVoucher(null);
-    setShareError("");
-  }
-
-  async function submitShare(e: React.FormEvent) {
-    e.preventDefault();
-    if (!shareVoucher || !shareModal || shareBusy) return;
-    setShareBusy(true);
-    setShareError("");
-    try {
-      if (shareModal === "email") {
-        await vouchersApi.sendEmail(shareVoucher.id, {
-          email: shareEmail.trim(),
-          message: shareMessage.trim() || undefined,
-        });
-        setMsg(`Email sent for voucher ${shareVoucher.voucherNumber}.`);
-      } else {
-        await vouchersApi.sendWhatsapp(shareVoucher.id, {
-          phone: sharePhone.trim(),
-          message: shareMessage.trim() || undefined,
-        });
-        setMsg(`WhatsApp message sent for voucher ${shareVoucher.voucherNumber}.`);
-      }
-      closeShareModal();
-    } catch (error) {
-      setShareError(apiErrorMessage(error, "Could not send voucher."));
-    } finally {
-      setShareBusy(false);
-    }
-  }
-
-  async function del(x: Voucher) {
-    if (!confirm(`Delete voucher ${x.voucherNumber}?`)) return;
-    try {
-      await vouchersApi.delete(x.id);
-      if (editingId === x.id) resetForm();
-      load();
-    } catch (error) {
-      setMsg(apiErrorMessage(error, "Could not delete voucher."));
-    }
-  }
-
-  function openDocument(url: string) {
-    window.open(url, "_blank", "noopener");
-  }
-
-  const shown = rows ?? [];
-
-  return (
-    <>
-      <Head title="Vouchers" text="Create payment vouchers when someone pays on behalf of the company." />
-
-      <form onSubmit={submit} className="card-site grid gap-5 p-6 md:grid-cols-2">
-        {editingNumber && (
-          <p className="rounded-lg bg-secondary p-3 text-sm text-primary md:col-span-2">
-            Editing voucher <span className="font-semibold">{editingNumber}</span>
-          </p>
-        )}
-        {form.expenseId && !editingId && (
-          <p className="rounded-lg bg-secondary p-3 text-sm text-primary md:col-span-2">
-            Filled in from an expense. You can edit before creating.
-          </p>
-        )}
-        <L id="v-date" label="Voucher date *">
-          <input id="v-date" type="date" className="field" value={form.voucherDate} onChange={(e) => setForm({ ...form, voucherDate: e.target.value })} required />
+      <div className="flex flex-wrap items-end gap-3">
+        <L id="x-from" label="From date">
+          <input id="x-from" type="date" className="field h-9" value={dateDraft.from} onChange={(event) => setDateDraft((current) => ({ ...current, from: event.target.value }))} />
         </L>
-        <L id="v-type" label="Voucher type *">
-          <select id="v-type" className="field" value={form.voucherType} onChange={(e) => setForm({ ...form, voucherType: e.target.value as VoucherType })}>
-            {VOUCHER_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
+        <L id="x-to" label="To date">
+          <input id="x-to" type="date" className="field h-9" value={dateDraft.to} onChange={(event) => setDateDraft((current) => ({ ...current, to: event.target.value }))} />
         </L>
-        <L id="v-title" label="Title *">
-          <input id="v-title" className="field" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required />
-        </L>
-        <L id="v-mode" label="Payment mode *">
-          <select id="v-mode" className="field" value={form.paymentMode} onChange={(e) => setForm({ ...form, paymentMode: e.target.value as PaymentMode })}>
-            {PAYMENT_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-          </select>
-        </L>
-        <L id="v-paid" label="Paid by *">
-          <input id="v-paid" className="field" value={form.paidBy} onChange={(e) => setForm({ ...form, paidBy: e.target.value })} required />
-        </L>
-        <L id="v-payee" label="Payee *">
-          <input id="v-payee" className="field" value={form.payee} onChange={(e) => setForm({ ...form, payee: e.target.value })} required />
-        </L>
-        <L id="v-amt" label="Amount (INR) *">
-          <input id="v-amt" type="number" step="0.01" min="0" className="field" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
-        </L>
-        <L id="v-cat" label="Category">
-          <select id="v-cat" className="field" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
-            <option value="">None</option>
-            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
-        </L>
-        <L id="v-exp" label="Expense">
-          <select id="v-exp" className="field" value={form.expenseId} onChange={(e) => setForm({ ...form, expenseId: e.target.value })}>
-            <option value="">None</option>
-            {expenses.map((ex) => (
-              <option key={ex.id} value={ex.id}>{ex.expenseName} — {day(ex.date)} — {inr(ex.amount)}</option>
+        <L id="x-filter-cat" label="Category">
+          <select
+            id="x-filter-cat"
+            className="field h-9"
+            value={categoryId}
+            onChange={(event) => {
+              setCategoryId(event.target.value);
+              setNotice(null);
+              setPage(1);
+            }}
+          >
+            <option value="">All Categories</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>{category.name}</option>
             ))}
           </select>
         </L>
-        <L id="v-ref" label="Reference number">
-          <input id="v-ref" className="field" value={form.referenceNumber} onChange={(e) => setForm({ ...form, referenceNumber: e.target.value })} />
-        </L>
-        <L id="v-doc" label="Supporting document">
-          <label htmlFor="v-doc" className="field flex cursor-pointer items-center gap-2 text-sm">
-            <Upload className="h-4 w-4 text-primary" />
-            <span className="truncate text-muted-foreground">{file ? file.name : "Upload image or PDF (max 10 MB)"}</span>
-            <input id="v-doc" type="file" accept="image/*,.pdf" className="sr-only" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
-          </label>
-        </L>
-        <div className="md:col-span-2">
-          <L id="v-desc" label="Description">
-            <textarea id="v-desc" rows={2} className="field h-auto py-3" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
-          </L>
-        </div>
-        <div className="md:col-span-2">
-          <L id="v-notes" label="Notes">
-            <textarea id="v-notes" rows={2} className="field h-auto py-3" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-          </L>
-        </div>
-        <div className="flex flex-wrap items-center gap-4 md:col-span-2">
-          <button disabled={busy} className="btn btn-primary">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Pencil className="h-4 w-4" /> : <Receipt className="h-4 w-4" />}
-            {editingId ? "Update voucher" : "Create voucher"}
-          </button>
-          {editingId && (
-            <button type="button" className="btn btn-outline" onClick={resetForm}>Cancel edit</button>
-          )}
-          {msg && <p role="status" className="text-sm text-muted-foreground">{msg}</p>}
-        </div>
-      </form>
+        <button type="button" className="btn btn-primary h-9" onClick={applyDateFilters}>Apply filters</button>
+        <button type="button" className="btn btn-outline h-9" onClick={clearFilters}>Clear filters</button>
+      </div>
+      {filterError && <p className="mt-2 text-sm text-destructive">{filterError}</p>}
+      {categoriesError && (
+        <p className="mt-2 text-sm text-destructive">
+          {categoriesError}{" "}
+          <button type="button" className="font-semibold underline" onClick={loadCategories}>Retry</button>
+        </p>
+      )}
 
-      <div className="mt-10 flex flex-wrap items-end gap-3">
-        <L id="v-search" label="Search">
-          <input id="v-search" className="field h-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Voucher no., title, payee…" />
-        </L>
-        <L id="v-ft" label="Type">
-          <select id="v-ft" className="field h-9" value={filterType} onChange={(e) => setFilterType(e.target.value as VoucherType | "")}>
-            <option value="">All types</option>
-            {VOUCHER_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
-        </L>
-        <L id="v-fs" label="Status">
-          <select id="v-fs" className="field h-9" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value as VoucherStatus | "")}>
-            <option value="">All statuses</option>
-            {VOUCHER_STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
-        </L>
+      <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
+        <p className="text-sm">
+          Filtered total{" "}
+          <span className="font-semibold">{loaded && !listError ? inr(totalAmount) : "—"}</span>
+          <span className="mt-1 block text-xs text-muted-foreground">All expenses matching the current filters, not only this page.</span>
+        </p>
       </div>
 
-      <h2 className="mt-8 text-xl font-semibold">Issued vouchers</h2>
-      {loading ? <Spin /> : shown.length === 0 ? (
-        <div className="card-site mt-4 p-10 text-center text-muted-foreground">No vouchers yet.</div>
+      {loading ? <Spin /> : listError ? (
+        <div className="card-site mt-4 p-10 text-center" role="alert">
+          <p className="text-destructive">{listError}</p>
+          <button type="button" className="btn btn-outline mt-4" onClick={refreshList}>Retry</button>
+        </div>
+      ) : (rows ?? []).length === 0 ? (
+        <div className="card-site mt-4 p-10 text-center text-muted-foreground">
+          {filtersActive ? "No expenses match the selected filters." : "No expenses yet."}
+        </div>
       ) : (
         <div className="card-site mt-4 overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="p-4">Voucher no.</th>
                 <th className="p-4">Date</th>
-                <th className="p-4">Type</th>
-                <th className="p-4">Title</th>
-                <th className="p-4">Paid by</th>
-                <th className="p-4">Payee</th>
+                <th className="p-4">Expense Name</th>
                 <th className="p-4">Category</th>
-                <th className="p-4">Status</th>
-                <th className="p-4 text-right">Amount</th>
-                <th className="p-4" />
+                <th className="p-4">Paid By</th>
+                <th className="p-4 text-right">Amount (₹)</th>
+                <th className="p-4">Receipt</th>
+                <th className="p-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {shown.map((r) => (
-                <tr key={r.id} className="border-b border-border last:border-0">
-                  <td className="p-4 font-semibold">{r.voucherNumber}</td>
-                  <td className="whitespace-nowrap p-4">{day(r.voucherDate)}</td>
-                  <td className="p-4">{r.voucherType}</td>
-                  <td className="p-4"><div className="font-medium">{r.title}</div>{r.description && <div className="text-xs text-muted-foreground">{r.description}</div>}</td>
-                  <td className="p-4">{r.paidBy}</td>
-                  <td className="p-4">{r.payee}</td>
-                  <td className="p-4">{r.category?.name ?? "—"}</td>
-                  <td className="p-4">{r.status}</td>
-                  <td className="whitespace-nowrap p-4 text-right font-semibold">{inr(r.amount)}</td>
+              {(rows ?? []).map((expense) => (
+                <tr key={expense.id} className="border-b border-border last:border-0">
+                  <td className="whitespace-nowrap p-4">{formatLedgerDate(expense.date)}</td>
+                  <td className="p-4 font-medium">{expense.expenseName}</td>
+                  <td className="p-4">{expense.category.name}</td>
+                  <td className="p-4">{expense.paidBy}</td>
+                  <td className="whitespace-nowrap p-4 text-right font-semibold">{inr(Number(expense.amount))}</td>
+                  <td className="p-4">
+                    {expense.receipt?.url ? (
+                      <button type="button" className="btn btn-outline h-8 px-3 text-sm" onClick={() => openReceipt(expense.receipt!.url)}>
+                        <Download className="h-4 w-4" />
+                        View
+                      </button>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="p-4">
                     <div className="flex justify-end gap-1">
-                      {r.document?.url && (
-                        <button title="View document" aria-label="View document" onClick={() => openDocument(r.document!.url)} className="btn btn-outline h-8 px-2">
-                          <Eye className="h-4 w-4" />
-                        </button>
-                      )}
-                      <button title="Send email" aria-label="Send email" onClick={() => openShareModal(r, "email")} className="btn btn-outline h-8 px-2"><Mail className="h-4 w-4" /></button>
-                      <button title="Send WhatsApp" aria-label="Send WhatsApp" onClick={() => openShareModal(r, "whatsapp")} className="btn btn-outline h-8 px-2"><MessageCircle className="h-4 w-4" /></button>
-                      <button title="Print" aria-label="Print voucher" onClick={() => printVoucher(r)} className="btn btn-outline h-8 px-2"><Printer className="h-4 w-4" /></button>
-                      <button title="Edit" aria-label="Edit voucher" onClick={() => startEdit(r)} className="btn btn-outline h-8 px-2"><Pencil className="h-4 w-4" /></button>
-                      <button title="Delete" aria-label="Delete voucher" onClick={() => del(r)} className="btn btn-outline h-8 px-2 text-destructive"><Trash2 className="h-4 w-4" /></button>
+                      {can("expenses.update") && <button type="button" title="Edit" aria-label="Edit expense" onClick={() => openEdit(expense)} className="btn btn-outline h-8 px-2"><Pencil className="h-4 w-4" /></button>}
+                      {can("vouchers.create") && <button type="button" title="Create voucher" aria-label="Create voucher" onClick={() => onVoucher(expense)} className="btn btn-outline h-8 px-2"><Receipt className="h-4 w-4" /></button>}
+                      {can("expenses.delete") && <button type="button" title="Delete" aria-label="Delete expense" onClick={() => del(expense)} className="btn btn-outline h-8 px-2 text-destructive"><Trash2 className="h-4 w-4" /></button>}
                     </div>
                   </td>
                 </tr>
@@ -586,82 +451,176 @@ export function VouchersPanel({ draft }: { draft: Partial<VoucherDraft> | null }
         </div>
       )}
 
-      {shareModal && shareVoucher && (
+      {loaded && !listError && (
+        <LedgerPagination
+          pageSizeId="x-page-size"
+          page={page}
+          totalPages={pagination.totalPages}
+          limit={limit}
+          loading={loading}
+          onPageChange={setPage}
+          onLimitChange={(next) => {
+            setLimit(next);
+            setPage(1);
+          }}
+        />
+      )}
+
+      {formOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="voucher-share-title"
+          role="presentation"
+          onMouseDown={() => { if (!busy) closeForm(); }}
         >
           <form
-            onSubmit={submitShare}
-            className="card-site w-full max-w-lg p-6"
-            onClick={(ev) => ev.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="expense-form-title"
+            className="card-site max-h-[90vh] w-full max-w-2xl overflow-y-auto p-6"
+            onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && !busy) closeForm();
+            }}
+            onSubmit={saveExpense}
           >
-            <h2 id="voucher-share-title" className="text-xl font-semibold">
-              {shareModal === "email" ? "Send Email" : "Send WhatsApp"}
-            </h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Voucher {shareVoucher.voucherNumber}
-            </p>
-            <div className="mt-5 space-y-4">
-              {shareModal === "email" ? (
-                <div>
-                  <label htmlFor="v-share-email" className="mb-2 block text-sm font-semibold">
-                    Recipient email *
-                  </label>
-                  <input
-                    id="v-share-email"
-                    type="email"
-                    className="field"
-                    value={shareEmail}
-                    onChange={(e) => setShareEmail(e.target.value)}
-                    required
-                    autoComplete="email"
-                  />
-                </div>
-              ) : (
-                <div>
-                  <label htmlFor="v-share-phone" className="mb-2 block text-sm font-semibold">
-                    Recipient phone number *
-                  </label>
-                  <input
-                    id="v-share-phone"
-                    type="tel"
-                    className="field"
-                    value={sharePhone}
-                    onChange={(e) => setSharePhone(e.target.value)}
-                    placeholder="+919876543210"
-                    required
-                    autoComplete="tel"
-                  />
-                </div>
-              )}
+            <h2 id="expense-form-title" className="text-xl font-semibold">{editingId ? "Edit Expense" : "Add Expense"}</h2>
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
               <div>
-                <label htmlFor="v-share-msg" className="mb-2 block text-sm font-semibold">
-                  Message
-                </label>
-                <textarea
-                  id="v-share-msg"
-                  rows={3}
-                  className="field h-auto py-3"
-                  value={shareMessage}
-                  onChange={(e) => setShareMessage(e.target.value)}
-                />
+                <L id="exp-name" label="Expense name *">
+                  <input
+                    id="exp-name"
+                    className="field"
+                    value={draft.expenseName}
+                    aria-invalid={Boolean(fieldErrors.expenseName)}
+                    aria-describedby={fieldErrors.expenseName ? "exp-name-error" : undefined}
+                    onChange={(event) => setDraft({ ...draft, expenseName: event.target.value })}
+                  />
+                </L>
+                <FieldError id="exp-name-error" message={fieldErrors.expenseName} />
+              </div>
+              <div>
+                <L id="exp-cat" label="Category *">
+                  <select
+                    id="exp-cat"
+                    className="field"
+                    value={draft.categoryId}
+                    disabled={categoriesLoading || (categories.length === 0 && !draft.categoryId)}
+                    aria-invalid={Boolean(fieldErrors.categoryId)}
+                    aria-describedby={fieldErrors.categoryId ? "exp-cat-error" : undefined}
+                    onChange={(event) => setDraft({ ...draft, categoryId: event.target.value })}
+                  >
+                    <option value="">Select a category</option>
+                    {editingCategory && !categories.some((category) => category.id === editingCategory.id) && (
+                      <option value={editingCategory.id}>{editingCategory.name}</option>
+                    )}
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>{category.name}</option>
+                    ))}
+                  </select>
+                </L>
+                <FieldError id="exp-cat-error" message={fieldErrors.categoryId} />
+              </div>
+              <div>
+                <L id="exp-paid" label="Paid by *">
+                  <input
+                    id="exp-paid"
+                    className="field"
+                    value={draft.paidBy}
+                    aria-invalid={Boolean(fieldErrors.paidBy)}
+                    aria-describedby={fieldErrors.paidBy ? "exp-paid-error" : undefined}
+                    onChange={(event) => setDraft({ ...draft, paidBy: event.target.value })}
+                  />
+                </L>
+                <FieldError id="exp-paid-error" message={fieldErrors.paidBy} />
+              </div>
+              <div>
+                <L id="exp-amt" label="Amount (₹) *">
+                  <input
+                    id="exp-amt"
+                    className="field"
+                    inputMode="decimal"
+                    value={draft.amount}
+                    aria-invalid={Boolean(fieldErrors.amount)}
+                    aria-describedby={fieldErrors.amount ? "exp-amt-error" : undefined}
+                    onChange={(event) => setDraft({ ...draft, amount: event.target.value })}
+                  />
+                </L>
+                <FieldError id="exp-amt-error" message={fieldErrors.amount} />
+              </div>
+              <div>
+                <L id="exp-date" label="Date">
+                  <input
+                    id="exp-date"
+                    type="date"
+                    className="field"
+                    value={draft.date}
+                    aria-invalid={Boolean(fieldErrors.date)}
+                    aria-describedby={fieldErrors.date ? "exp-date-error" : undefined}
+                    onChange={(event) => setDraft({ ...draft, date: event.target.value })}
+                  />
+                </L>
+                <FieldError id="exp-date-error" message={fieldErrors.date} />
+              </div>
+              <div>
+                <L id="exp-receipt" label="Receipt">
+                  <label htmlFor="exp-receipt" className="field flex cursor-pointer items-center gap-2 text-sm">
+                    <Upload className="h-4 w-4 text-primary" />
+                    <span className="truncate text-muted-foreground">
+                      {file
+                        ? file.name
+                        : removeReceipt
+                          ? "Receipt will be removed"
+                          : existingReceipt
+                            ? "Replace the current receipt"
+                            : "JPEG, PNG, or PDF (max 10 MB)"}
+                    </span>
+                    <input
+                      id="exp-receipt"
+                      type="file"
+                      accept="image/jpeg,image/png,.jpg,.jpeg,.png,.pdf,application/pdf"
+                      className="sr-only"
+                      aria-invalid={Boolean(fieldErrors.receipt)}
+                      aria-describedby={fieldErrors.receipt ? "exp-receipt-error" : undefined}
+                      onChange={(event) => chooseReceipt(event.target.files?.[0] ?? null)}
+                    />
+                  </label>
+                </L>
+                <FieldError id="exp-receipt-error" message={fieldErrors.receipt} />
+                {editingId && existingReceipt && !file && !removeReceipt && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                    <span className="text-muted-foreground">Current receipt: {existingReceipt.fileName}</span>
+                    <button type="button" className="btn btn-outline h-8 px-3 text-sm" onClick={() => openReceipt(existingReceipt.url)}>View</button>
+                    <button type="button" className="btn btn-outline h-8 px-3 text-sm" onClick={() => setRemoveReceipt(true)}>Remove receipt</button>
+                  </div>
+                )}
+                {editingId && removeReceipt && !file && (
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    The current receipt will be removed when you save.{" "}
+                    <button type="button" className="font-semibold underline" onClick={() => setRemoveReceipt(false)}>Keep receipt</button>
+                  </p>
+                )}
+                {editingId && file && existingReceipt && (
+                  <p className="mt-2 text-sm text-muted-foreground">This file replaces {existingReceipt.fileName}.</p>
+                )}
+              </div>
+              <div className="md:col-span-2">
+                <L id="exp-notes" label="Notes">
+                  <textarea id="exp-notes" rows={2} className="field h-auto py-3" value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} />
+                </L>
               </div>
             </div>
+            {!categoriesLoading && categories.length === 0 && !categoriesError && !draft.categoryId && (
+              <p className="mt-4 text-sm text-muted-foreground">No expense categories available. Create a category before adding an expense.</p>
+            )}
+            {categoriesError && <p className="mt-4 text-sm text-destructive">{categoriesError}</p>}
+            {formError && <p role="alert" className="mt-4 text-sm text-destructive">{formError}</p>}
             <div className="mt-6 flex flex-wrap gap-3">
-              <button type="button" onClick={closeShareModal} disabled={shareBusy} className="btn btn-outline">
-                Cancel
-              </button>
-              <button type="submit" disabled={shareBusy} className="btn btn-primary">
-                {shareBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {shareModal === "email" ? "Send Email" : "Send WhatsApp"}
+              <button type="button" className="btn btn-outline" disabled={busy} onClick={closeForm}>Cancel</button>
+              <button type="submit" className="btn btn-primary" disabled={busy || categoriesLoading || (categories.length === 0 && !draft.categoryId)}>
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : editingId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {editingId ? "Save Changes" : "Save expense"}
               </button>
             </div>
-            {shareError && (
-              <p role="status" className="mt-3 text-sm text-destructive">{shareError}</p>
-            )}
           </form>
         </div>
       )}
@@ -669,56 +628,3 @@ export function VouchersPanel({ draft }: { draft: Partial<VoucherDraft> | null }
   );
 }
 
-/* ---------------- printable voucher ---------------- */
-
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
-
-function words(n: number): string {
-  const a = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-  const b = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-  const two = (x: number) => (x < 20 ? a[x] : `${b[Math.floor(x / 10)]}${x % 10 ? " " + a[x % 10] : ""}`)!;
-  const three = (x: number) => `${x >= 100 ? a[Math.floor(x / 100)] + " Hundred" + (x % 100 ? " " : "") : ""}${x % 100 ? two(x % 100) : ""}`;
-  if (n === 0) return "Zero";
-  let out = ""; const cr = Math.floor(n / 1e7); n %= 1e7; const lk = Math.floor(n / 1e5); n %= 1e5; const th = Math.floor(n / 1000); n %= 1000;
-  if (cr) out += three(cr) + " Crore "; if (lk) out += two(lk) + " Lakh "; if (th) out += two(th) + " Thousand "; if (n) out += three(n);
-  return out.trim();
-}
-
-function paymentModeLabel(mode: PaymentMode): string {
-  return PAYMENT_MODES.find((m) => m.value === mode)?.label ?? mode;
-}
-
-export function printVoucher(v: Voucher) {
-  const amt = Number(v.amount);
-  const rupees = Math.floor(amt); const paise = Math.round((amt - rupees) * 100);
-  const inWords = `Rupees ${words(rupees)}${paise ? ` and ${words(paise)} Paise` : ""} Only`;
-  const particulars = v.description || v.title;
-  const w = window.open("", "_blank", "width=820,height=900");
-  if (!w) { alert("Please allow pop-ups to print the voucher."); return; }
-  w.document.write(`<!doctype html><html><head><title>Voucher ${v.voucherNumber}</title><style>
-  body{font-family:Arial,Helvetica,sans-serif;color:#00142B;margin:40px}
-  .box{border:2px solid #003C82;padding:32px;max-width:720px;margin:auto}
-  .hdr{display:flex;align-items:center;gap:20px;margin-bottom:4px}
-  .logo{height:72px;width:auto;max-width:140px;object-fit:contain}
-  h1{margin:0;color:#003C82;font-size:22px} .sub{font-size:12px;color:#555}
-  .title{text-align:center;letter-spacing:4px;font-weight:bold;margin:24px 0;padding:8px;background:#F6F9FB;border:1px solid #ddd}
-  .row{display:flex;justify-content:space-between;margin:6px 0;font-size:14px}
-  table{width:100%;border-collapse:collapse;margin-top:16px;font-size:14px}
-  td,th{border:1px solid #ccc;padding:10px;text-align:left} th{background:#F6F9FB}
-  .r{text-align:right} .sig{display:flex;justify-content:space-between;margin-top:70px;font-size:13px}
-  .sig div{border-top:1px solid #00142B;padding-top:6px;width:30%;text-align:center}
-  @media print{body{margin:0}}
-  </style></head><body><div class="box">
-  <div class="hdr"><img class="logo" src="${esc(LOGO_URL)}" alt="${esc(COMPANY.brand)} logo" /><div><h1>${esc(COMPANY.legalName)}</h1><div class="sub">${esc("CIN: " + COMPANY.cin + " · " + COMPANY.location)}</div></div></div>
-  <div class="title">PAYMENT VOUCHER</div>
-  <div class="row"><span><b>Voucher No:</b> ${esc(v.voucherNumber)}</span><span><b>Date:</b> ${esc(day(v.voucherDate))}</span></div>
-  <div class="row"><span><b>Paid by:</b> ${esc(v.paidBy)}</span><span><b>Payee:</b> ${esc(v.payee)}</span></div>
-  <div class="row"><span><b>Mode:</b> ${esc(paymentModeLabel(v.paymentMode))}</span></div>
-  <table><tr><th>Particulars</th><th class="r">Amount (INR)</th></tr>
-  <tr><td>${esc(particulars || "-")}</td><td class="r">${esc(inr(amt))}</td></tr>
-  <tr><th>Total</th><th class="r">${esc(inr(amt))}</th></tr></table>
-  <p style="font-size:14px;margin-top:16px"><b>Amount in words:</b> ${esc(inWords)}</p>
-  <div class="sig"><div>Prepared by</div><div>Approved by</div><div>Receiver's signature</div></div>
-  </div><script>window.onload=()=>setTimeout(()=>window.print(),200)</script></body></html>`);
-  w.document.close();
-}

@@ -48,18 +48,52 @@ export type CreateExpensePayload = {
   notes?: string;
 };
 
+export type UpdateExpensePayload = {
+  expenseName?: string;
+  categoryId?: string;
+  paidBy?: string;
+  amount?: number;
+  date?: string;
+  notes?: string;
+};
+
+export type ExpenseListQuery = {
+  categoryId?: string;
+  from?: string;
+  to?: string;
+  page?: number;
+  limit?: number;
+};
+
+export function buildExpenseListQuery(params?: ExpenseListQuery): string {
+  const search = new URLSearchParams();
+  if (params?.categoryId) search.set("categoryId", params.categoryId);
+  if (params?.from) search.set("from", params.from);
+  if (params?.to) search.set("to", params.to);
+  if (params?.page) search.set("page", String(params.page));
+  if (params?.limit) search.set("limit", String(params.limit));
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
 export const expensesApi = {
-  list(params?: { categoryId?: string; limit?: number }): Promise<ExpenseListResult> {
-    const search = new URLSearchParams();
-    if (params?.categoryId) search.set("categoryId", params.categoryId);
-    if (params?.limit) search.set("limit", String(params.limit));
-    const q = search.toString();
-    return apiRequest<ExpenseListResult>(`/expenses${q ? `?${q}` : ""}`, { auth: true });
+  list(params?: ExpenseListQuery): Promise<ExpenseListResult> {
+    return apiRequest<ExpenseListResult>(`/expenses${buildExpenseListQuery(params)}`, {
+      auth: true,
+    });
   },
 
   create(payload: CreateExpensePayload): Promise<Expense> {
     return apiRequest<Expense>("/expenses", {
       method: "POST",
+      auth: true,
+      json: payload,
+    });
+  },
+
+  update(id: string, payload: UpdateExpensePayload): Promise<Expense> {
+    return apiRequest<Expense>(`/expenses/${id}`, {
+      method: "PUT",
       auth: true,
       json: payload,
     });
@@ -79,6 +113,13 @@ export const expensesApi = {
       method: "POST",
       auth: true,
       formData,
+    });
+  },
+
+  deleteReceipt(id: string): Promise<Expense> {
+    return apiRequest<Expense>(`/expenses/${id}/receipt`, {
+      method: "DELETE",
+      auth: true,
     });
   },
 

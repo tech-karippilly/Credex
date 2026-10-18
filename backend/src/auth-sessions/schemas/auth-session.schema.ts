@@ -14,7 +14,7 @@ export class AuthSession {
   @Prop({ required: true, index: true })
   tokenHash!: string;
 
-  @Prop({ required: true, index: true })
+  @Prop({ required: true })
   expiresAt!: Date;
 }
 

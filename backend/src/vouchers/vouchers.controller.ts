@@ -16,8 +16,12 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import {
+  RequirePermissions,
+  RequirePermissionsWhenPresent,
+} from '../rbac/decorators/require-permissions.decorator';
+import { PermissionsGuard } from '../rbac/guards/permissions.guard';
 import {
   VOUCHER_DOCUMENT_MAX_BYTES,
   VOUCHER_DOCUMENT_MIME_REGEX,
@@ -39,7 +43,7 @@ const documentFilePipe = new ParseFilePipe({
 });
 
 @Controller('vouchers')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class VouchersController {
   constructor(
     private readonly vouchersService: VouchersService,
@@ -47,6 +51,7 @@ export class VouchersController {
   ) {}
 
   @Post()
+  @RequirePermissions('vouchers.create')
   async create(@Body() createVoucherDto: CreateVoucherDto) {
     const data = await this.vouchersService.create(createVoucherDto);
 
@@ -58,6 +63,7 @@ export class VouchersController {
   }
 
   @Get()
+  @RequirePermissions('vouchers.read')
   async findAll(@Query() query: VoucherQueryDto) {
     const data = await this.vouchersService.findAll(query);
 
@@ -69,6 +75,7 @@ export class VouchersController {
   }
 
   @Get(':id')
+  @RequirePermissions('vouchers.read')
   async findOne(@Param('id') id: string) {
     const data = await this.vouchersService.findOne(id);
 
@@ -80,6 +87,8 @@ export class VouchersController {
   }
 
   @Put(':id')
+  @RequirePermissions('vouchers.update')
+  @RequirePermissionsWhenPresent('status', 'vouchers.status.update')
   async update(
     @Param('id') id: string,
     @Body() updateVoucherDto: UpdateVoucherDto,
@@ -94,6 +103,7 @@ export class VouchersController {
   }
 
   @Patch(':id/status')
+  @RequirePermissions('vouchers.status.update')
   async updateStatus(
     @Param('id') id: string,
     @Body() updateStatusDto: UpdateVoucherStatusDto,
@@ -111,6 +121,7 @@ export class VouchersController {
   }
 
   @Delete(':id')
+  @RequirePermissions('vouchers.delete')
   async remove(@Param('id') id: string) {
     await this.vouchersService.remove(id);
 
@@ -121,6 +132,7 @@ export class VouchersController {
   }
 
   @Post(':id/document')
+  @RequirePermissions('vouchers.update')
   @UseInterceptors(FileInterceptor('document'))
   async uploadDocument(
     @Param('id') id: string,
@@ -136,6 +148,7 @@ export class VouchersController {
   }
 
   @Delete(':id/document')
+  @RequirePermissions('vouchers.update')
   async removeDocument(@Param('id') id: string) {
     const data = await this.vouchersService.removeDocument(id);
 
@@ -147,10 +160,8 @@ export class VouchersController {
   }
 
   @Post(':id/send-email')
-  async sendEmail(
-    @Param('id') id: string,
-    @Body() dto: SendVoucherEmailDto,
-  ) {
+  @RequirePermissions('vouchers.send_email')
+  async sendEmail(@Param('id') id: string, @Body() dto: SendVoucherEmailDto) {
     const data = await this.voucherSharingService.sendEmail(id, dto);
 
     return {
@@ -161,6 +172,7 @@ export class VouchersController {
   }
 
   @Post(':id/send-whatsapp')
+  @RequirePermissions('vouchers.send_whatsapp')
   async sendWhatsapp(
     @Param('id') id: string,
     @Body() dto: SendVoucherWhatsappDto,

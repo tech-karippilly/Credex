@@ -13,8 +13,12 @@ import { CareersModule } from './careers/careers.module';
 import { ServicesModule } from './services/services.module';
 import { ExpenseCategoriesModule } from './expense-categories/expense-categories.module';
 import { ExpensesModule } from './expenses/expenses.module';
+import { PaymentsModule } from './payments/payments.module';
+import { ReportsModule } from './reports/reports.module';
 import { VouchersModule } from './vouchers/vouchers.module';
+import { EnquiriesModule } from './enquiries/enquiries.module';
 import { SiteContactModule } from './site-contact/site-contact.module';
+import { RbacModule } from './rbac/rbac.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -27,6 +31,7 @@ import { UsersModule } from './users/users.module';
     DatabaseModule,
     UsersModule,
     AuthModule,
+    RbacModule,
     CloudinaryModule,
     EmailModule,
     AiModule,
@@ -35,9 +40,12 @@ import { UsersModule } from './users/users.module';
     CareersModule,
     ApplicationsModule,
     SiteContactModule,
+    EnquiriesModule,
     ExpenseCategoriesModule,
     ExpensesModule,
     VouchersModule,
+    PaymentsModule,
+    ReportsModule,
   ],
 })
 export class AppModule {}

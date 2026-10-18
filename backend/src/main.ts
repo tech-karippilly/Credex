@@ -15,8 +15,9 @@ async function bootstrap() {
   const nodeEnv = configService.getOrThrow<string>('app.nodeEnv');
 
   app.setGlobalPrefix('api/v1');
+  const frontendUrl = configService.get<string>('app.frontendUrl');
   app.enableCors({
-    origin: nodeEnv === 'production' ? false : true,
+    origin: nodeEnv === 'production' ? frontendUrl : true,
     credentials: true,
   });
 

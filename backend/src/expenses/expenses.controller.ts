@@ -17,8 +17,9 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Response } from 'express';
-import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator';
+import { PermissionsGuard } from '../rbac/guards/permissions.guard';
 import {
   EXPENSE_RECEIPT_MAX_BYTES,
   EXPENSE_RECEIPT_MIME_REGEX,
@@ -40,7 +41,7 @@ const receiptFilePipe = new ParseFilePipe({
 });
 
 @Controller('expenses')
-@UseGuards(JwtAuthGuard, AdminGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
 export class ExpensesController {
   constructor(
     private readonly expensesService: ExpensesService,
@@ -50,6 +51,7 @@ export class ExpensesController {
   ) {}
 
   @Post('receipt/analyze')
+  @RequirePermissions('expenses.analyze')
   @UseInterceptors(FileInterceptor('receipt'))
   async analyzeReceipt(
     @UploadedFile(receiptFilePipe) file: Express.Multer.File,
@@ -64,6 +66,7 @@ export class ExpensesController {
   }
 
   @Get('reports/export')
+  @RequirePermissions('expenses.export')
   async exportReport(
     @Query() query: ExpenseReportQueryDto,
     @Res() res: Response,
@@ -79,6 +82,7 @@ export class ExpensesController {
   }
 
   @Get('reports')
+  @RequirePermissions('expenses.read')
   async getReport(@Query() query: ExpenseReportQueryDto) {
     const data = await this.expenseReportService.generateReport(query);
 
@@ -97,6 +101,7 @@ export class ExpensesController {
   }
 
   @Post()
+  @RequirePermissions('expenses.create')
   async create(@Body() createExpenseDto: CreateExpenseDto) {
     const data = await this.expensesService.create(createExpenseDto);
 
@@ -108,6 +113,7 @@ export class ExpensesController {
   }
 
   @Get()
+  @RequirePermissions('expenses.read')
   async findAll(@Query() query: ExpenseQueryDto) {
     const data = await this.expensesService.findAll(query);
 
@@ -119,6 +125,7 @@ export class ExpensesController {
   }
 
   @Get(':id')
+  @RequirePermissions('expenses.read')
   async findOne(@Param('id') id: string) {
     const data = await this.expensesService.findOne(id);
 
@@ -130,6 +137,7 @@ export class ExpensesController {
   }
 
   @Put(':id')
+  @RequirePermissions('expenses.update')
   async update(
     @Param('id') id: string,
     @Body() updateExpenseDto: UpdateExpenseDto,
@@ -144,6 +152,7 @@ export class ExpensesController {
   }
 
   @Delete(':id')
+  @RequirePermissions('expenses.delete')
   async remove(@Param('id') id: string) {
     await this.expensesService.remove(id);
 
@@ -154,6 +163,7 @@ export class ExpensesController {
   }
 
   @Post(':id/receipt')
+  @RequirePermissions('expenses.update')
   @UseInterceptors(FileInterceptor('receipt'))
   async uploadReceipt(
     @Param('id') id: string,
@@ -169,6 +179,7 @@ export class ExpensesController {
   }
 
   @Delete(':id/receipt')
+  @RequirePermissions('expenses.update')
   async removeReceipt(@Param('id') id: string) {
     const data = await this.expensesService.removeReceipt(id);
 

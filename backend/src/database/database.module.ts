@@ -12,6 +12,7 @@ import { Connection } from 'mongoose';
       useFactory: (configService: ConfigService) => {
         const uri = configService.getOrThrow<string>('mongodb.uri');
         const logger = new Logger('DatabaseModule');
+        const databaseName = mongodbDatabaseName(uri);
 
         return {
           uri,
@@ -23,7 +24,7 @@ import { Connection } from 'mongoose';
             : {}),
           connectionFactory: (connection: Connection) => {
             connection.on('connected', () => {
-              logger.log('MongoDB connected successfully');
+              logger.log(`MongoDB connected successfully (database ${databaseName})`);
             });
             connection.on('error', (err: Error) => {
               logger.error(`MongoDB connection error: ${err.message}`);
@@ -39,3 +40,14 @@ import { Connection } from 'mongoose';
   ],
 })
 export class DatabaseModule {}
+
+/** Database name from the URI path. Credentials and host are not logged. */
+export function mongodbDatabaseName(uri: string): string {
+  try {
+    const withHttpScheme = uri.replace(/^mongodb(\+srv)?:\/\//, 'https://');
+    const name = new URL(withHttpScheme).pathname.replace(/^\//, '').split('/')[0];
+    return name || '(default)';
+  } catch {
+    return '(unparsed)';
+  }
+}

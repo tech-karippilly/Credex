@@ -12,8 +12,9 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator';
+import { PermissionsGuard } from '../rbac/guards/permissions.guard';
 import { UpdateSiteContactDto } from './dto/update-site-contact.dto';
 import { SiteContactService } from './site-contact.service';
 
@@ -35,7 +36,8 @@ export class SiteContactController {
   }
 
   @Put()
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('site_contact.update')
   async update(@Body() updateSiteContactDto: UpdateSiteContactDto) {
     const data = await this.siteContactService.update(updateSiteContactDto);
 
@@ -47,7 +49,8 @@ export class SiteContactController {
   }
 
   @Post('images')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('site_contact.update')
   @UseInterceptors(FileInterceptor('image'))
   async uploadImage(
     @UploadedFile(

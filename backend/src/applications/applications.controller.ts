@@ -12,8 +12,9 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AdminGuard } from '../auth/guards/admin.guard';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RequirePermissions } from '../rbac/decorators/require-permissions.decorator';
+import { PermissionsGuard } from '../rbac/guards/permissions.guard';
 import { ApplicationsService } from './applications.service';
 import { CreateApplicationDto } from './dto/create-application.dto';
 import { ListApplicationsQueryDto } from './dto/list-applications-query.dto';
@@ -56,7 +57,8 @@ export class ApplicationsController {
   }
 
   @Get()
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('applications.read')
   async findAll(@Query() query: ListApplicationsQueryDto) {
     const data = await this.applicationsService.findAll(query.careerId);
 
@@ -68,7 +70,8 @@ export class ApplicationsController {
   }
 
   @Get(':id')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('applications.read')
   async findOne(@Param('id') id: string) {
     const data = await this.applicationsService.findOne(id);
 
@@ -80,7 +83,8 @@ export class ApplicationsController {
   }
 
   @Patch(':id/status')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('applications.status.update')
   async updateStatus(
     @Param('id') id: string,
     @Body() updateApplicationStatusDto: UpdateApplicationStatusDto,
@@ -98,7 +102,8 @@ export class ApplicationsController {
   }
 
   @Post(':id/analyze')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('applications.analyze')
   async analyze(@Param('id') id: string) {
     const data = await this.applicationsService.analyze(id);
 
@@ -110,7 +115,8 @@ export class ApplicationsController {
   }
 
   @Delete(':id')
-  @UseGuards(JwtAuthGuard, AdminGuard)
+  @UseGuards(JwtAuthGuard, PermissionsGuard)
+  @RequirePermissions('applications.delete')
   async remove(@Param('id') id: string) {
     await this.applicationsService.remove(id);
 

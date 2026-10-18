@@ -26,6 +26,10 @@ export interface VoucherResponse {
   paidBy: string;
   payee: string;
   amount: number;
+  amountPaid: number;
+  outstandingAmount: number;
+  availableToAllocate: number;
+  settlementStatus: string;
   currency: string;
   paymentMode: string;
   categoryId: string | null;

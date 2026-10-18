@@ -8,6 +8,7 @@ import {
   Matches,
   Min,
 } from 'class-validator';
+import { IsTwoDecimalAmount } from './is-two-decimal-amount';
 
 export class CreateExpenseDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
@@ -25,6 +26,7 @@ export class CreateExpenseDto {
 
   @IsNumber()
   @Min(0.01)
+  @IsTwoDecimalAmount()
   amount!: number;
 
   @IsString()
