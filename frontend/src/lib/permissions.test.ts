@@ -39,4 +39,18 @@ describe("admin permission helpers", () => {
     expect(canSeeAdminTab(access, "users")).toBe(true);
     expect(canSeeAdminTab(access, "roles")).toBe(false);
   });
+
+  it("shows the Leads tab only with leads.read", () => {
+    const access = { superAdmin: false, permissions: ["leads.read"] };
+    expect(canEnterAdmin(access)).toBe(true);
+    expect(canSeeAdminTab(access, "leads")).toBe(true);
+    expect(canSeeAdminTab(access, "enquiries")).toBe(false);
+    expect(visibleAdminTabs(access).map((item) => item.id)).toEqual(["overview", "leads"]);
+  });
+
+  it("does not reveal Leads from a write permission alone", () => {
+    const access = { superAdmin: false, permissions: ["leads.create"] };
+    expect(canSeeAdminTab(access, "leads")).toBe(false);
+    expect(canEnterAdmin(access)).toBe(false);
+  });
 });

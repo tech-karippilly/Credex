@@ -1,8 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
-import { careerToJobRow, serviceToRow, siteContactToSettings } from "./cms-mappers";
+import { careerToJobRow, serviceToRow, siteContactToSettings, teamMemberToRow } from "./cms-mappers";
 import { getApiBaseUrl } from "./api";
 import type { ApiSuccessResponse } from "./api-types";
-import type { Career, Service, SiteContact } from "./api-types";
+import type { Career, Service, SiteContact, TeamMember } from "./api-types";
 
 export type SiteSettings = {
   email: string;
@@ -42,6 +42,17 @@ export type JobRow = {
   good_to_have: string;
   sort: number;
   published: boolean;
+};
+
+export type TeamMemberRow = {
+  id: string;
+  fullName: string;
+  designation: string;
+  department: string;
+  positionInCompany: string;
+  bio: string;
+  photoUrl: string;
+  sort: number;
 };
 
 export const DEFAULT_SETTINGS: SiteSettings = {
@@ -160,12 +171,14 @@ const EMPTY_SITE_CONTENT = {
   settings: DEFAULT_SETTINGS,
   services: [] as ServiceRow[],
   jobs: [] as JobRow[],
+  team: [] as TeamMemberRow[],
 };
 
 const CONTENT_REQUESTS = [
   { path: "/site-contact", label: "site contact" },
   { path: "/services", label: "services" },
   { path: "/careers", label: "careers" },
+  { path: "/team-members", label: "team members" },
 ] as const;
 
 async function loadSiteContent() {
@@ -173,6 +186,7 @@ async function loadSiteContent() {
     fetchJson<SiteContact>(CONTENT_REQUESTS[0].path),
     fetchJson<Service[]>(CONTENT_REQUESTS[1].path),
     fetchJson<Career[]>(CONTENT_REQUESTS[2].path),
+    fetchJson<TeamMember[]>(CONTENT_REQUESTS[3].path),
   ]);
 
   const failures = CONTENT_REQUESTS.flatMap((request, index) => {
@@ -215,16 +229,19 @@ async function loadSiteContent() {
   const siteContact = settled[0];
   const services = settled[1];
   const careers = settled[2];
+  const teamMembers = settled[3];
   if (
     !siteContact ||
     siteContact.status !== "fulfilled" ||
     !services ||
     services.status !== "fulfilled" ||
     !careers ||
-    careers.status !== "fulfilled"
+    careers.status !== "fulfilled" ||
+    !teamMembers ||
+    teamMembers.status !== "fulfilled"
   ) {
     throw new Error(
-      "Failed to load site content: site contact, services, or careers did not resolve",
+      "Failed to load site content: site contact, services, careers, or team members did not resolve",
     );
   }
 
@@ -243,6 +260,7 @@ async function loadSiteContent() {
     },
     services: services.value.map(serviceToRow).filter((row) => row.published),
     jobs: careers.value.map(careerToJobRow).filter((row) => row.published),
+    team: teamMembers.value.map(teamMemberToRow).filter((row) => row.photoUrl),
   };
 }
 

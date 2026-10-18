@@ -18,6 +18,8 @@ import { ReportsModule } from './reports/reports.module';
 import { VouchersModule } from './vouchers/vouchers.module';
 import { EnquiriesModule } from './enquiries/enquiries.module';
 import { SiteContactModule } from './site-contact/site-contact.module';
+import { TeamMembersModule } from './team-members/team-members.module';
+import { LeadsModule } from './leads/leads.module';
 import { RbacModule } from './rbac/rbac.module';
 import { UsersModule } from './users/users.module';
 
@@ -40,6 +42,8 @@ import { UsersModule } from './users/users.module';
     CareersModule,
     ApplicationsModule,
     SiteContactModule,
+    TeamMembersModule,
+    LeadsModule,
     EnquiriesModule,
     ExpenseCategoriesModule,
     ExpensesModule,

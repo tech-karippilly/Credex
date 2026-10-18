@@ -4,11 +4,13 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   LayoutDashboard, Settings, Layers, Briefcase, FileText, Inbox, LogOut, Loader2, Plus, Trash2,
   Save, ExternalLink, Upload, Eye, EyeOff, Download, Wallet, Receipt, Tags, Banknote, BarChart3,
-  Users, Shield,
+  Users, Shield, Contact,
 } from "lucide-react";
 import { AdminAccessProvider, useCan } from "@/components/admin/admin-access";
 import { ExpenseCategoriesPanel } from "@/components/admin/expense-categories";
 import { RolesPanel } from "@/components/admin/roles-panel";
+import { TeamPanel } from "@/components/admin/team-panel";
+import { LeadsPanel } from "@/components/admin/leads-panel";
 import { UsersPanel } from "@/components/admin/users-panel";
 import { Logo } from "@/components/site/Logo";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -25,6 +27,7 @@ import { siteContactApi } from "@/lib/site-contact-api";
 import { servicesApi } from "@/lib/services-api";
 import { applicationsApi, type JobApplication } from "@/lib/applications-api";
 import { enquiriesApi, type Enquiry } from "@/lib/enquiries-api";
+import { leadsApi } from "@/lib/leads-api";
 import { careersApi } from "@/lib/careers-api";
 import {
   careerToJobRow,
@@ -207,9 +210,11 @@ const TAB_ICONS: Record<Tab, typeof Settings> = {
   overview: LayoutDashboard,
   settings: Settings,
   services: Layers,
+  team: Users,
   jobs: Briefcase,
   applications: FileText,
   enquiries: Inbox,
+  leads: Contact,
   expenses: Wallet,
   "expense-categories": Tags,
   vouchers: Receipt,
@@ -225,9 +230,11 @@ function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminA
     { id: "overview" as const, label: "Overview" },
     { id: "settings" as const, label: "Site & Contact" },
     { id: "services" as const, label: "Services" },
+    { id: "team" as const, label: "Team" },
     { id: "jobs" as const, label: "Careers" },
     { id: "applications" as const, label: "Applications" },
     { id: "enquiries" as const, label: "Enquiries" },
+    { id: "leads" as const, label: "Leads" },
     { id: "expenses" as const, label: "Expenses" },
     { id: "expense-categories" as const, label: "Expense Categories" },
     { id: "vouchers" as const, label: "Vouchers" },
@@ -286,9 +293,11 @@ function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminA
         {tab === "overview" && <Overview go={setTab} access={access} />}
         {tab === "settings" && <SettingsPanel onSaved={refreshSite} />}
         {tab === "services" && <ServicesPanel onSaved={refreshSite} />}
+        {tab === "team" && <TeamPanel onSaved={refreshSite} />}
         {tab === "jobs" && <JobsPanel onSaved={refreshSite} />}
         {tab === "applications" && <ApplicationsPanel />}
         {tab === "enquiries" && <EnquiriesPanel />}
+        {tab === "leads" && <LeadsPanel />}
         {tab === "expenses" && <ExpensesPanel onVoucher={(x) => {
           setDraft({
             expenseId: x.id,
@@ -418,7 +427,7 @@ const lines = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
 /* ---------------- overview ---------------- */
 
 function Overview({ go, access }: { go: (t: Tab) => void; access: AdminAccess }) {
-  const [c, setC] = useState<{ services: number | null; jobs: number | null; applications: number | null; enquiries: number | null }>({ services: null, jobs: null, applications: null, enquiries: null });
+  const [c, setC] = useState<{ services: number | null; jobs: number | null; applications: number | null; enquiries: number | null; leads: number | null }>({ services: null, jobs: null, applications: null, enquiries: null, leads: null });
   const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -437,8 +446,17 @@ function Overview({ go, access }: { go: (t: Tab) => void; access: AdminAccess })
       const jobs = await count("Careers", canSeeAdminTab(access, "jobs"), () => careersApi.listAdmin());
       const applications = await count("Applications", canSeeAdminTab(access, "applications"), () => applicationsApi.list());
       const enquiries = await count("Enquiries", canSeeAdminTab(access, "enquiries"), () => enquiriesApi.list());
+      let leads: number | null = 0;
+      if (canSeeAdminTab(access, "leads")) {
+        try {
+          leads = (await leadsApi.summary()).total;
+        } catch (error) {
+          problems.push(`Leads: ${apiErrorMessage(error, "Could not load")}`);
+          leads = null;
+        }
+      }
       if (!cancelled) {
-        setC({ services, jobs, applications, enquiries });
+        setC({ services, jobs, applications, enquiries, leads });
         setNotice(problems.length > 0 ? problems.join(" ") : null);
       }
     })();
@@ -450,6 +468,7 @@ function Overview({ go, access }: { go: (t: Tab) => void; access: AdminAccess })
       { label: "Job openings", value: c.jobs, tab: "jobs" as const, icon: Briefcase },
       { label: "Applications", value: c.applications, tab: "applications" as const, icon: FileText },
       { label: "Enquiries", value: c.enquiries, tab: "enquiries" as const, icon: Inbox },
+      { label: "Leads", value: c.leads, tab: "leads" as const, icon: Contact },
     ] as const
   ).filter((card) => canSeeAdminTab(access, card.tab));
   return (
