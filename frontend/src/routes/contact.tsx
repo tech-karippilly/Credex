@@ -10,7 +10,7 @@ export const Route = createFileRoute("/contact")({
   head: () =>
     seo({
       title: "Contact Credex | Talk to a Technology Partner in Kerala",
-      description: "Have a business challenge, software requirement or technology idea? Contact Credex.in Tech Solutions in Irinjalakuda, Kerala.",
+      description: "Have a business challenge or want a demo of the CREDEX lending platform? Contact Credex.In in Irinjalakuda, Kerala.",
       path: "/contact",
     }),
   component: Contact,
