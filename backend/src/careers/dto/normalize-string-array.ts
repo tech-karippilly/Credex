@@ -6,10 +6,11 @@ export function normalizeStringArray(value: unknown): string[] | undefined {
     return [];
   }
   if (Array.isArray(value)) {
+    if (value.some((item) => typeof item !== 'string')) {
+      return value as string[];
+    }
     return value
-      .map((item) =>
-        typeof item === 'string' ? item.trim() : String(item).trim(),
-      )
+      .map((item) => item.trim())
       .filter((line) => line.length > 0);
   }
   if (typeof value === 'string') {

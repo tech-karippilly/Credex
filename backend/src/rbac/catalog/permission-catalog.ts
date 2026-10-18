@@ -51,6 +51,16 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = [
   permission('services', 'update', 'Update services'),
   permission('services', 'delete', 'Delete services'),
 
+  permission('team_members', 'read', 'View team members in administration'),
+  permission('team_members', 'create', 'Create team member profiles'),
+  permission('team_members', 'update', 'Update team member profiles'),
+  permission('team_members', 'delete', 'Delete team member profiles'),
+  permission(
+    'team_members',
+    'status.update',
+    'Change team member publication status',
+  ),
+
   permission('applications', 'read', 'View job applications'),
   permission('applications', 'delete', 'Delete job applications'),
   permission('applications', 'status.update', 'Change job application status'),
@@ -61,6 +71,14 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = [
 
   permission('enquiries', 'read', 'View contact enquiries'),
   permission('enquiries', 'delete', 'Delete contact enquiries'),
+
+  permission('leads', 'read', 'View leads and follow-up activity'),
+  permission('leads', 'create', 'Create leads'),
+  permission('leads', 'update', 'Update leads and record follow-up activity'),
+  permission('leads', 'delete', 'Delete leads'),
+  permission('leads', 'assign', 'Assign leads to login users'),
+  permission('leads', 'import', 'Import leads from a spreadsheet'),
+  permission('leads', 'export', 'Export leads'),
 
   permission('expense_categories', 'read', 'View expense categories'),
   permission('expense_categories', 'create', 'Create expense categories'),

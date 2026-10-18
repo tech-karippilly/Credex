@@ -1,5 +1,5 @@
-import type { Career, Service, SiteContact } from "./api-types";
-import type { JobRow, ServiceRow, SiteSettings } from "./content.functions";
+import type { Career, Service, SiteContact, TeamMember, TeamMemberAdmin } from "./api-types";
+import type { JobRow, ServiceRow, SiteSettings, TeamMemberRow } from "./content.functions";
 
 export type SiteSettingsForm = SiteSettings & {
   hero_image_publicId: string;
@@ -84,5 +84,34 @@ export function careerToJobRow(career: Career): JobRow {
     good_to_have: (career.goodToHave ?? []).join("\n"),
     sort: career.order,
     published: career.isVisible ?? true,
+  };
+}
+
+export function teamMemberToRow(member: TeamMember): TeamMemberRow {
+  return {
+    id: member.id,
+    fullName: member.fullName,
+    designation: member.designation,
+    department: member.department,
+    positionInCompany: member.positionInCompany,
+    bio: member.bio ?? "",
+    photoUrl: member.photo?.url ?? "",
+    sort: member.order,
+  };
+}
+
+export type TeamMemberAdminRow = TeamMemberRow & {
+  status: TeamMemberAdmin["status"];
+  updatedAt: string;
+};
+
+export function teamMemberAdminToRow(member: TeamMemberAdmin): TeamMemberAdminRow {
+  return {
+    ...teamMemberToRow({
+      ...member,
+      photo: member.photo ? { url: member.photo.url } : { url: "" },
+    }),
+    status: member.status,
+    updatedAt: member.updatedAt,
   };
 }

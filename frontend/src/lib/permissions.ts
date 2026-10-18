@@ -2,9 +2,11 @@ export type AdminTab =
   | "overview"
   | "settings"
   | "services"
+  | "team"
   | "jobs"
   | "applications"
   | "enquiries"
+  | "leads"
   | "expenses"
   | "expense-categories"
   | "vouchers"
@@ -34,9 +36,11 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
   { id: "overview", label: "Overview" },
   { id: "settings", label: "Site & Contact", anyOf: ["site_contact.read", "site_contact.update"] },
   { id: "services", label: "Services", anyOf: ["services.read"] },
+  { id: "team", label: "Team", anyOf: ["team_members.read"] },
   { id: "jobs", label: "Careers", anyOf: ["careers.read"] },
   { id: "applications", label: "Applications", anyOf: ["applications.read"] },
   { id: "enquiries", label: "Enquiries", anyOf: ["enquiries.read"] },
+  { id: "leads", label: "Leads", anyOf: ["leads.read"] },
   { id: "expenses", label: "Expenses", anyOf: ["expenses.read"] },
   { id: "expense-categories", label: "Expense Categories", anyOf: ["expense_categories.read"] },
   { id: "vouchers", label: "Vouchers", anyOf: ["vouchers.read"] },
@@ -51,9 +55,11 @@ export const PERMISSION_MODULE_LABELS: Record<string, string> = {
   roles: "Roles",
   careers: "Careers",
   services: "Services",
+  team_members: "Team",
   applications: "Applications",
   site_contact: "Site & Contact",
   enquiries: "Enquiries",
+  leads: "Leads",
   expense_categories: "Expense Categories",
   expenses: "Expenses",
   vouchers: "Vouchers",
@@ -68,6 +74,8 @@ const ACTION_LABELS: Record<string, string> = {
   delete: "Delete",
   "status.update": "Change status",
   export: "Export",
+  import: "Import",
+  assign: "Assign",
   analyze: "Analyze",
   send_email: "Send email",
   send_whatsapp: "Send WhatsApp",

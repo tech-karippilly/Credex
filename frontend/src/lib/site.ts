@@ -10,15 +10,15 @@ function cloudinaryLogo(size: number) {
 /** Full-size logo used in the header, footer, and print layouts. */
 export const LOGO_URL = `${CLOUDINARY_IMAGE_BASE}/${LOGO_CLOUDINARY_PATH}`;
 
-/** Browser tab and bookmark icons (Credex logo, not generic placeholders). */
-export const FAVICON_URL = cloudinaryLogo(32);
-export const APPLE_TOUCH_ICON_URL = cloudinaryLogo(180);
+/** Browser tab icon: same geometric mark as the navbar logo. */
+export const FAVICON_URL = "/favicon.svg";
+export const APPLE_TOUCH_ICON_URL = "/apple-touch-icon.png";
 
 /** Social / Open Graph preview image. */
 export const OG_IMAGE_URL = cloudinaryLogo(512);
 
 export const siteIconLinks = [
-  { rel: "icon", href: FAVICON_URL, type: "image/jpeg", sizes: "32x32" },
+  { rel: "icon", href: FAVICON_URL, type: "image/svg+xml" },
   { rel: "apple-touch-icon", href: APPLE_TOUCH_ICON_URL, sizes: "180x180" },
 ] as const;
 
@@ -34,9 +34,9 @@ export const company = {
 export const nav = [
   { to: "/", label: "Home" },
   { to: "/about", label: "About" },
+  { to: "/team", label: "Team" },
   { to: "/services", label: "Services" },
   { to: "/solutions", label: "Solutions" },
   { to: "/careers", label: "Careers" },
   { to: "/contact", label: "Contact" },
 ] as const;
-

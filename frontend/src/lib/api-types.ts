@@ -75,3 +75,21 @@ export interface Career {
   order: number;
   isVisible: boolean;
 }
+
+export interface TeamMember {
+  id: string;
+  fullName: string;
+  designation: string;
+  department: string;
+  positionInCompany: string;
+  bio: string;
+  photo: { url: string };
+  order: number;
+}
+
+export interface TeamMemberAdmin extends Omit<TeamMember, "photo"> {
+  photo: SiteContactImage | null;
+  status: "draft" | "published" | "inactive";
+  createdAt: string;
+  updatedAt: string;
+}
