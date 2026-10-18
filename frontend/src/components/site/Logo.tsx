@@ -1,22 +1,33 @@
-import { company, LOGO_URL } from "@/lib/site";
-
 export function Logo({ inverted = false }: { inverted?: boolean }) {
   return (
-    <span className="flex items-center gap-2.5">
-      <img
-        src={LOGO_URL}
-        alt={`${company.brand} logo`}
-        width={44}
-        height={44}
-        className="h-11 w-11 shrink-0 rounded-full object-cover"
-      />
-      <span className="leading-none">
-        <span className={`block font-display text-lg font-bold tracking-tight ${inverted ? "text-ink-foreground" : "text-foreground"}`}>
-          Credex<span className="text-cyan">.</span>in
-        </span>
-        <span className={`block text-[10px] font-semibold uppercase tracking-[0.18em] ${inverted ? "text-ink-muted" : "text-muted-foreground"}`}>
-          Tech Solutions
-        </span>
+    <span className="group flex items-center gap-2.5">
+      {/* Geometric monogram mark */}
+      <span className="relative inline-flex h-8 w-8 shrink-0 items-center justify-center">
+        <svg viewBox="0 0 32 32" className="h-8 w-8" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+          <rect
+            x="1.25"
+            y="1.25"
+            width="29.5"
+            height="29.5"
+            rx="9"
+            fill="var(--primary)"
+          />
+          <path
+            d="M22 11.5a6.8 6.8 0 1 0 0 9"
+            stroke="#fff"
+            strokeWidth="2.6"
+            strokeLinecap="round"
+            fill="none"
+          />
+          <circle cx="22.5" cy="16" r="1.9" fill="#fff" />
+        </svg>
+      </span>
+      <span
+        className={`font-display text-[1.35rem] font-bold leading-none tracking-[-0.02em] ${
+          inverted ? "text-ink-foreground" : "text-foreground"
+        }`}
+      >
+        Credex<span className="text-primary">.</span>In
       </span>
     </span>
   );

@@ -23,12 +23,12 @@ export const siteIconLinks = [
 ] as const;
 
 export const company = {
-  legalName: "CREDEX.IN TECH SOLUTIONS PRIVATE LIMITED",
-  brand: "Credex.in Tech Solutions Pvt. Ltd.",
-  tagline: "Ideas. Technology. Real Impact.",
+  legalName: "CREDEX.IN",
+  brand: "Credex.In",
+  tagline: "Software development. Products that scale.",
   website: "credexfin.com",
   cin: "U62099KL2026PTC106127",
-  location: "Irinjalakuda, Kerala, India",
+  location: "Moonupeedika, Thrissur, Kerala, India",
 };
 
 export const nav = [

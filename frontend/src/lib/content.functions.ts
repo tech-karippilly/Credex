@@ -47,28 +47,43 @@ export type JobRow = {
 export const DEFAULT_SETTINGS: SiteSettings = {
   email: "hr@credexfin.com",
   phone: "+91 80785 99537",
-  location: "Irinjalakuda, Kerala, India",
+  location: "Moonupeedika, Thrissur, Kerala, India",
   linkedin: "",
   instagram: "",
-  hero_title: "Technology That Solves Real Business Problems.",
+  hero_title: "We build software that runs real businesses.",
   hero_text:
-    "Credex builds practical, scalable technology solutions that help businesses simplify operations, automate processes, improve efficiency, and create real business value.",
+    "Credex.In is a software development team in Kerala. We ship custom applications, SaaS platforms and business automation — including CREDEX, our loan management software for India's NBFCs and MFIs.",
   hero_image: "",
   about_image: "",
 };
+
+class SiteContentApiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SiteContentApiError";
+  }
+}
 
 async function fetchJson<T>(path: string): Promise<T> {
   const res = await fetch(`${getApiBaseUrl()}${path}`, {
     headers: { Accept: "application/json" },
   });
-  const body = (await res.json()) as ApiSuccessResponse<T> | { success: false; message: string };
-  if (!res.ok || !body.success) {
-    throw new Error("message" in body ? body.message : "Failed to load site content");
+  let body: ApiSuccessResponse<T> | { success?: false; message?: string };
+  try {
+    body = (await res.json()) as ApiSuccessResponse<T> | { success?: false; message?: string };
+  } catch {
+    throw new SiteContentApiError("Failed to load site content");
+  }
+  if (!res.ok || !("success" in body) || !body.success) {
+    throw new SiteContentApiError(
+      "message" in body && body.message ? body.message : "Failed to load site content",
+    );
   }
   return body.data;
 }
 
-function isApiUnreachable(error: unknown): boolean {
+function isApiUnavailable(error: unknown): boolean {
+  if (error instanceof SiteContentApiError) return true;
   if (!(error instanceof Error)) return false;
   if (error.message === "fetch failed") return true;
   const cause = error.cause;
@@ -110,9 +125,9 @@ export const getSiteContent = createServerFn({ method: "GET" }).handler(async ()
       jobs: careers.map(careerToJobRow),
     };
   } catch (error) {
-    if (isApiUnreachable(error)) {
+    if (isApiUnavailable(error)) {
       console.warn(
-        `[getSiteContent] Backend API unreachable at ${getApiBaseUrl()}; using defaults. Start the backend (npm run start:dev in /backend).`,
+        `[getSiteContent] Backend API unavailable at ${getApiBaseUrl()}; using defaults. Start this repo's backend (npm run start:dev in /backend).`,
       );
       return EMPTY_SITE_CONTENT;
     }
