@@ -13,13 +13,13 @@ export function Logo({ inverted = false }: { inverted?: boolean }) {
             fill="var(--primary)"
           />
           <path
-            d="M22 11.5a6.8 6.8 0 1 0 0 9"
+            d="M10.5 21.5V10.5L21.5 21.5V10.5"
             stroke="#fff"
-            strokeWidth="2.6"
+            strokeWidth="2.8"
             strokeLinecap="round"
+            strokeLinejoin="round"
             fill="none"
           />
-          <circle cx="22.5" cy="16" r="1.9" fill="#fff" />
         </svg>
       </span>
       <span
@@ -27,7 +27,7 @@ export function Logo({ inverted = false }: { inverted?: boolean }) {
           inverted ? "text-ink-foreground" : "text-foreground"
         }`}
       >
-        Credex<span className="text-primary">.</span>In
+        NEURA<span className="text-primary">FORGE</span>
       </span>
     </span>
   );

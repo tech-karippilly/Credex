@@ -10,14 +10,14 @@ import { ApplyForm } from "@/components/site/forms";
 export const Route = createFileRoute("/careers")({
   head: () =>
     seo({
-      title: "Careers at Credex | Jobs in Moonupeedika, Thrissur, Kerala",
-      description: "Build your career with Credex.In. Openings for fullstack developers, UI/UX designers, marketing & sales, and junior/fresher fullstack programmers in Thrissur, Kerala.",
+      title: "Careers at NEURAFORGE | Jobs in Irinjalakuda, Thrissur, Kerala",
+      description: "Build your career with NEURAFORGE. Openings for fullstack developers, UI/UX designers, marketing & sales, and junior/fresher fullstack programmers in Thrissur, Kerala.",
       path: "/careers",
     }),
   component: Careers,
 });
 
-const LOCATION = "Moonupeedika, Thrissur, Kerala";
+const LOCATION = "Irinjalakuda, Thrissur, Kerala";
 
 const FALLBACK_JOBS: JobRow[] = [
   {
@@ -129,7 +129,7 @@ function Careers() {
 
   return (
     <>
-      <PageHero eyebrow="Careers" title="Build Your Career With Credex" text="We're building a team that believes technology should solve real problems and create real value — software, design, product and growth roles in Thrissur, Kerala." />
+      <PageHero eyebrow="Careers" title="Build Your Career With NEURAFORGE" text="We're building a team that believes technology should solve real problems and create real value — software, design, product and growth roles in Thrissur, Kerala." />
 
       <section className="container-site py-20">
         <div className="flex flex-wrap items-end justify-between gap-4">

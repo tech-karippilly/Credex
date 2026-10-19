@@ -11,8 +11,8 @@ import { Team } from "@/components/site/Team";
 export const Route = createFileRoute("/about")({
   head: () =>
     seo({
-      title: "About Credex | Software Development Company in Kerala",
-      description: "Credex.In is a technology company in Moonupeedika, Thrissur, Kerala, building the lending OS for India's NBFCs and MFIs.",
+      title: "About NEURAFORGE | Software Development Company in Kerala",
+      description: "NEURAFORGE is a technology company in Irinjalakuda, Thrissur, Kerala, building the lending OS for India's NBFCs and MFIs.",
       path: "/about",
     }),
   component: About,
@@ -54,7 +54,7 @@ function About() {
   return (
     <>
       <PageHero
-        eyebrow="About Credex.In"
+        eyebrow="About NEURAFORGE"
         title="A software team that ships real products."
         text="We design and build custom software, SaaS and automation — and we run CREDEX, our loan management platform for India's NBFCs and MFIs."
       />
@@ -65,7 +65,7 @@ function About() {
           <Reveal>
             <SectionHeading eyebrow="Who We Are" title="A technology partner for growing businesses" />
             <p className="mt-6 text-lg leading-relaxed text-muted-foreground">
-              {company.brand} is a software company based in Moonupeedika, Thrissur, Kerala, focused on building the lending operating system for India&apos;s NBFCs and MFIs — origination, collections and the ledger on one platform.
+              {company.brand} is a software company based in Irinjalakuda, Thrissur, Kerala, focused on building the lending operating system for India&apos;s NBFCs and MFIs — origination, collections and the ledger on one platform.
             </p>
             <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
               We work closely with businesses to understand how they operate, then design and build technology that removes friction, saves time and creates measurable value.
@@ -93,7 +93,7 @@ function About() {
                 ))}
               </div>
               <p className="relative mt-5 font-mono text-xs text-muted-foreground">
-                HQ · Moonupeedika, Thrissur, Kerala
+                HQ · Irinjalakuda, Thrissur, Kerala
               </p>
             </div>
           </Reveal>

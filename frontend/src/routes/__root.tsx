@@ -96,7 +96,7 @@ const orgSchema = {
   slogan: company.tagline,
   logo: LOGO_URL,
   image: LOGO_URL,
-  address: { "@type": "PostalAddress", addressLocality: "Irinjalakuda", addressRegion: "Kerala", addressCountry: "IN" },
+  address: { "@type": "PostalAddress", addressLocality: "Irinjalakuda, Thrissur", addressRegion: "Kerala", addressCountry: "IN" },
   identifier: { "@type": "PropertyValue", propertyID: "CIN", value: company.cin },
 };
 
@@ -106,7 +106,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { name: "author", content: company.brand },
-      { name: "theme-color", content: "#fafaf8" },
+      { name: "theme-color", content: "#15171f" },
       { property: "og:site_name", content: company.brand },
     ],
     links: [

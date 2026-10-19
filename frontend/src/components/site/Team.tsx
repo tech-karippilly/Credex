@@ -32,7 +32,7 @@ export function Team() {
         <SectionHeading
           eyebrow="Our Team"
           title="The people behind the platform."
-          text="Engineers, designers and QA specialists at Credex.In — building client software and our CREDEX lending platform."
+          text="Engineers, designers and QA specialists at NEURAFORGE — building client software and our CREDEX lending platform."
         />
       </Reveal>
       <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-5">

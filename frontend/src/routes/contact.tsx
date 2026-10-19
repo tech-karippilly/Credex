@@ -9,8 +9,8 @@ import { ContactForm } from "@/components/site/forms";
 export const Route = createFileRoute("/contact")({
   head: () =>
     seo({
-      title: "Contact Credex | Talk to a Technology Partner in Kerala",
-      description: "Have a business challenge or want a demo of the CREDEX lending platform? Contact Credex.In in Irinjalakuda, Kerala.",
+      title: "Contact NEURAFORGE | Talk to a Technology Partner in Kerala",
+      description: "Have a business challenge or want a demo of the CREDEX lending platform? Contact NEURAFORGE in Irinjalakuda, Thrissur, Kerala.",
       path: "/contact",
     }),
   component: Contact,
@@ -26,7 +26,7 @@ function Contact() {
   ];
   return (
     <>
-      <PageHero eyebrow="Contact" title="Let's Build Something That Matters." text="Have a business challenge, software requirement or technology idea? Talk to the Credex team." />
+      <PageHero eyebrow="Contact" title="Let's Build Something That Matters." text="Have a business challenge, software requirement or technology idea? Talk to the NEURAFORGE team." />
       <section className="container-site grid gap-10 py-20 lg:grid-cols-[1fr_1.6fr]">
         <div>
           <h2 className="text-2xl font-semibold">Get in touch</h2>

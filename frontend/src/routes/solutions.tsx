@@ -6,7 +6,7 @@ import { CtaBand, PageHero } from "@/components/site/blocks";
 export const Route = createFileRoute("/solutions")({
   head: () =>
     seo({
-      title: "Business Technology Solutions | Automation, SaaS & Data — Credex",
+      title: "Business Technology Solutions | Automation, SaaS & Data — NEURAFORGE",
       description: "Business process automation, digital workflows, custom business applications, SaaS platforms, data & reporting and digital transformation solutions focused on outcomes.",
       path: "/solutions",
     }),

@@ -10,7 +10,7 @@ function cloudinaryLogo(size: number) {
 /** Full-size logo used in the header, footer, and print layouts. */
 export const LOGO_URL = `${CLOUDINARY_IMAGE_BASE}/${LOGO_CLOUDINARY_PATH}`;
 
-/** Browser tab and bookmark icons (Credex logo, not generic placeholders). */
+/** Browser tab and bookmark icons (brand logo, not generic placeholders). */
 export const FAVICON_URL = cloudinaryLogo(32);
 export const APPLE_TOUCH_ICON_URL = cloudinaryLogo(180);
 
@@ -23,12 +23,12 @@ export const siteIconLinks = [
 ] as const;
 
 export const company = {
-  legalName: "CREDEX.IN",
-  brand: "Credex.In",
+  legalName: "NEURAFORGE",
+  brand: "NEURAFORGE",
   tagline: "Software development. Products that scale.",
   website: "credexfin.com",
   cin: "U62099KL2026PTC106127",
-  location: "Moonupeedika, Thrissur, Kerala, India",
+  location: "Irinjalakuda, Thrissur, Kerala, India",
 };
 
 export const nav = [

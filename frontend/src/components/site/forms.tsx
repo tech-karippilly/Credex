@@ -76,7 +76,7 @@ export function ContactForm() {
   }
 
   if (state === "done")
-    return <Success title="Thank you for reaching out." text="Your enquiry has been received. A member of the Credex team will get back to you shortly." onReset={() => setState("idle")} />;
+    return <Success title="Thank you for reaching out." text="Your enquiry has been received. A member of the NEURAFORGE team will get back to you shortly." onReset={() => setState("idle")} />;
 
   const inv = (k: keyof Errors) => ({ "aria-invalid": !!errors[k], "aria-describedby": errors[k] ? `${k}-error` : undefined });
 

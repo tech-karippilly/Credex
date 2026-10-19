@@ -9,9 +9,9 @@ import { CtaBand, PageHero, SectionHeading, Reveal } from "@/components/site/blo
 export const Route = createFileRoute("/services")({
   head: () =>
     seo({
-      title: "Services | Software, Mobile, Web, Cloud & Automation — Credex.In",
+      title: "Services | Software, Mobile, Web, Cloud & Automation — NEURAFORGE",
       description:
-        "End-to-end software services from Credex.In: custom software development, mobile app development, web platforms, SaaS, cloud & DevOps, UI/UX, QA, automation, API integration, fintech and ongoing support.",
+        "End-to-end software services from NEURAFORGE: custom software development, mobile app development, web platforms, SaaS, cloud & DevOps, UI/UX, QA, automation, API integration, fintech and ongoing support.",
       path: "/services",
     }),
   component: Services,

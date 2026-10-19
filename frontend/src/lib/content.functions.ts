@@ -47,12 +47,12 @@ export type JobRow = {
 export const DEFAULT_SETTINGS: SiteSettings = {
   email: "hr@credexfin.com",
   phone: "+91 80785 99537",
-  location: "Moonupeedika, Thrissur, Kerala, India",
+  location: "Irinjalakuda, Thrissur, Kerala, India",
   linkedin: "",
   instagram: "",
   hero_title: "We build software that runs real businesses.",
   hero_text:
-    "Credex.In is a software development team in Kerala. We ship custom applications, SaaS platforms and business automation — including CREDEX, our loan management software for India's NBFCs and MFIs.",
+    "NEURAFORGE is a software development team in Kerala. We ship custom applications, SaaS platforms and business automation — including CREDEX, our loan management software for India's NBFCs and MFIs.",
   hero_image: "",
   about_image: "",
 };

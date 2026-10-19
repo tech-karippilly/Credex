@@ -13,13 +13,14 @@ import { HeroIllustration } from "@/components/site/illustrations/HeroIllustrati
 import { BuildSpectrum } from "@/components/site/illustrations/BuildSpectrum";
 import { WorkflowPipeline } from "@/components/site/illustrations/WorkflowPipeline";
 import { TrustShieldArt } from "@/components/site/illustrations/TrustShieldArt";
+import { ImpactStats } from "@/components/site/illustrations/ImpactStats";
 
 export const Route = createFileRoute("/")({
   head: () =>
     seo({
-      title: "Credex.In | Software Development Team & NBFC Lending Platform",
+      title: "NEURAFORGE | Software Development Team & NBFC Lending Platform",
       description:
-        "Credex.In builds custom software, SaaS and automation for businesses. Explore CREDEX — our flagship loan management platform for India's NBFCs and MFIs.",
+        "NEURAFORGE builds custom software, SaaS and automation for businesses. Explore CREDEX — our flagship loan management platform for India's NBFCs and MFIs.",
       path: "/",
     }),
   component: Home,
@@ -230,17 +231,23 @@ function Home() {
           <div className="relative mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {approach.map((step, i) => (
               <Reveal key={step.title} delay={i * 70}>
-                <div className="card-site card-hover relative h-full p-7">
-                  <div className="flex items-center justify-between">
-                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-primary">
+                <div className="card-site card-hover group relative h-full overflow-hidden p-7">
+                  <span
+                    className="pointer-events-none absolute -bottom-6 -right-2 font-display text-8xl font-bold leading-none text-primary/[0.06] transition-all duration-500 group-hover:-bottom-4 group-hover:text-primary/[0.1]"
+                    aria-hidden="true"
+                  >
+                    {step.step}
+                  </span>
+                  <div className="relative flex items-center justify-between">
+                    <span className="inline-flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-primary transition-colors group-hover:bg-primary group-hover:text-white">
                       <step.icon className="h-5 w-5" strokeWidth={1.7} />
                     </span>
                     <span className="font-mono text-xs font-semibold tracking-widest text-primary/70">
                       STEP {step.step}
                     </span>
                   </div>
-                  <h3 className="mt-5 font-display text-xl font-semibold text-foreground">{step.title}</h3>
-                  <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">{step.text}</p>
+                  <h3 className="relative mt-5 font-display text-xl font-semibold text-foreground">{step.title}</h3>
+                  <p className="relative mt-2.5 text-sm leading-relaxed text-muted-foreground">{step.text}</p>
                 </div>
               </Reveal>
             ))}
@@ -322,6 +329,9 @@ function Home() {
         </div>
       </section>
 
+      {/* Animated impact metrics */}
+      <ImpactStats />
+
       {/* Lending Modules Bento Grid */}
       <section className="container-site py-20">
         <Reveal>
@@ -334,22 +344,29 @@ function Home() {
         <div className="mt-14 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {lendingModules.map((p, i) => (
             <Reveal key={p.title} delay={i * 60}>
-              <article className="card-bento group flex h-full flex-col p-7">
-                <div className="flex items-center justify-between">
+              <article className="card-bento group relative flex h-full flex-col overflow-hidden p-7">
+                {/* Texture + watermark motif */}
+                <div className="dot-matrix pointer-events-none absolute inset-0 opacity-40" aria-hidden="true" />
+                <p.icon
+                  className="pointer-events-none absolute -right-5 -top-5 h-28 w-28 text-primary/[0.06] transition-all duration-500 group-hover:-right-3 group-hover:-top-3 group-hover:text-primary/[0.1]"
+                  strokeWidth={1}
+                  aria-hidden="true"
+                />
+                <div className="relative flex items-center justify-between">
                   <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-primary/20 bg-secondary text-primary transition-colors group-hover:bg-primary group-hover:text-white">
                     <p.icon className="h-6 w-6" strokeWidth={1.6} />
                   </span>
-                  <span className="rounded-md bg-surface px-2 py-1 font-mono text-[10px] font-semibold tracking-wider text-muted-foreground">
+                  <span className="rounded-md border border-border bg-surface px-2 py-1 font-mono text-[10px] font-semibold tracking-wider text-muted-foreground">
                     {p.code}
                   </span>
                 </div>
-                <div className="mt-6 flex-1">
+                <div className="relative mt-6 flex-1">
                   <h3 className="text-xl font-semibold text-foreground">{p.title}</h3>
                   <p className="mt-2.5 text-sm leading-relaxed text-muted-foreground">{p.text}</p>
                 </div>
                 <Link
                   to="/solutions"
-                  className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
+                  className="relative mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
                 >
                   Module specifications{" "}
                   <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
@@ -409,11 +426,13 @@ function Home() {
             <div className="mt-9 space-y-3">
               {advantages.map((a, i) => (
                 <Reveal key={a.label} delay={i * 50}>
-                  <div className="card-site flex items-center gap-4 p-4">
-                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
+                  <div className="card-site group relative flex items-center gap-4 overflow-hidden p-4">
+                    <span className="absolute inset-y-0 left-0 w-0.5 bg-primary opacity-0 transition-opacity duration-300 group-hover:opacity-100" aria-hidden="true" />
+                    <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary transition-colors group-hover:bg-primary group-hover:text-white">
                       <a.icon className="h-5 w-5" strokeWidth={1.7} />
                     </span>
-                    <span className="text-sm font-semibold text-foreground sm:text-base">{a.label}</span>
+                    <span className="flex-1 text-sm font-semibold text-foreground sm:text-base">{a.label}</span>
+                    <span className="font-mono text-xs font-semibold text-muted-foreground/60">0{i + 1}</span>
                   </div>
                 </Reveal>
               ))}
@@ -447,7 +466,7 @@ function Home() {
       <CtaBand
         title="Building custom software or evaluating CREDEX?"
         text="Tell us about a bespoke product build, or book a live walkthrough of our NBFC loan management platform — our engineering team will tailor the session to your roadmap."
-        cta="Talk to Credex.In"
+        cta="Talk to NEURAFORGE"
       />
     </>
   );
