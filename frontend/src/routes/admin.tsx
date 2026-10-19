@@ -32,11 +32,11 @@ export const Route = createFileRoute("/admin")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Admin — NEURAFORGE" },
-      { name: "description", content: "NEURAFORGE website administration." },
+      { title: "Admin — CREDEX" },
+      { name: "description", content: "CREDEX website administration." },
       { name: "robots", content: "noindex, nofollow" },
-      { property: "og:title", content: "Admin — NEURAFORGE" },
-      { property: "og:description", content: "NEURAFORGE website administration." },
+      { property: "og:title", content: "Admin — CREDEX" },
+      { property: "og:description", content: "CREDEX website administration." },
       { property: "og:image", content: OG_IMAGE_URL },
     ],
     links: [...siteIconLinks],

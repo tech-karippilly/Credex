@@ -50,9 +50,9 @@ export const DEFAULT_SETTINGS: SiteSettings = {
   location: "Irinjalakuda, Thrissur, Kerala, India",
   linkedin: "",
   instagram: "",
-  hero_title: "We build software that runs real businesses.",
+  hero_title: "The next-generation lending OS for modern NBFCs.",
   hero_text:
-    "NEURAFORGE is a software development team in Kerala. We ship custom applications, SaaS platforms and business automation — including CREDEX, our loan management software for India's NBFCs and MFIs.",
+    "CREDEX unifies loan origination, KYC, branch & field collections, and the general ledger on one real-time core — purpose-built for India's NBFCs and MFIs.",
   hero_image: "",
   about_image: "",
 };

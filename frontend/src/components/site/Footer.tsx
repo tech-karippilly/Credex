@@ -13,10 +13,10 @@ export function Footer() {
           <Logo />
           <p className="mt-3 font-display text-lg text-primary">{company.tagline}</p>
           <div className="mt-6 flex gap-3">
-            {settings.linkedin && <a href={settings.linkedin} target="_blank" rel="noopener noreferrer" aria-label="NEURAFORGE on LinkedIn" className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border hover:border-primary hover:text-primary">
+            {settings.linkedin && <a href={settings.linkedin} target="_blank" rel="noopener noreferrer" aria-label="CREDEX on LinkedIn" className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border hover:border-primary hover:text-primary">
               <Linkedin className="h-4 w-4" />
             </a>}
-            {settings.instagram && <a href={settings.instagram} target="_blank" rel="noopener noreferrer" aria-label="NEURAFORGE on Instagram" className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border hover:border-primary hover:text-primary">
+            {settings.instagram && <a href={settings.instagram} target="_blank" rel="noopener noreferrer" aria-label="CREDEX on Instagram" className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-border hover:border-primary hover:text-primary">
               <Instagram className="h-4 w-4" />
             </a>}
           </div>

@@ -1,5 +1,5 @@
 /**
- * Hero visual: futuristic command topology — NEURAFORGE engineering studio + CREDEX NBFC OS.
+ * Hero visual: futuristic command topology — CREDEX lending OS core + its subsystems.
  */
 export function HeroIllustration() {
   return (
@@ -10,7 +10,7 @@ export function HeroIllustration() {
         <div className="flex items-center justify-between border-b border-border pb-3">
           <div className="flex items-center gap-2">
             <span className="font-mono text-base font-semibold tracking-wide uppercase text-foreground sm:text-lg">
-              NEURAFORGE // ARCHITECTURE GRAPH
+              CREDEX // LENDING OS
             </span>
           </div>
           <span className="rounded-full border border-border bg-surface px-2.5 py-0.5 font-mono text-[10px] text-muted-foreground">
@@ -98,67 +98,67 @@ export function HeroIllustration() {
               </circle>
             ))}
 
-            {/* Satellite 1: Custom Engineering */}
+            {/* Satellite 1: Origination */}
             <g className="animate-float" style={{ animationDelay: "0.2s" }} filter="url(#card-drop)">
               <rect x="24" y="52" width="168" height="86" rx="14" fill="var(--card)" stroke="var(--border)" strokeWidth="1.2" />
               <circle cx="48" cy="78" r="11" fill="var(--secondary)" />
               <circle cx="48" cy="78" r="4" fill="var(--primary)" className="animate-glow" />
-              <text x="68" y="76" fill="var(--foreground)" fontSize="12" fontWeight="700">Custom Engineering</text>
-              <text x="68" y="90" fill="var(--muted-foreground)" fontFamily="ui-monospace, monospace" fontSize="8.5">WEB · MOBILE · APIs</text>
+              <text x="68" y="76" fill="var(--foreground)" fontSize="12" fontWeight="700">Origination · LOS</text>
+              <text x="68" y="90" fill="var(--muted-foreground)" fontFamily="ui-monospace, monospace" fontSize="8.5">eKYC · UNDERWRITING</text>
               <rect x="40" y="110" width="136" height="5" rx="2.5" fill="var(--muted)" />
               <rect x="40" y="110" width="98" height="5" rx="2.5" fill="var(--primary)" fillOpacity="0.75" />
-              <text x="40" y="130" fill="var(--muted-foreground)" fontFamily="ui-monospace, monospace" fontSize="8">BUILD 97%</text>
+              <text x="40" y="130" fill="var(--muted-foreground)" fontFamily="ui-monospace, monospace" fontSize="8">SANCTIONED 97%</text>
             </g>
 
-            {/* Satellite 2: SaaS & Platforms */}
+            {/* Satellite 2: Collections */}
             <g className="animate-float" style={{ animationDelay: "0.9s" }} filter="url(#card-drop)">
               <rect x="348" y="52" width="168" height="86" rx="14" fill="var(--card)" stroke="var(--border)" strokeWidth="1.2" />
               <circle cx="372" cy="78" r="11" fill="var(--secondary)" />
               <circle cx="372" cy="78" r="4" fill="var(--primary)" />
-              <text x="392" y="76" fill="var(--foreground)" fontSize="12" fontWeight="700">SaaS &amp; Platforms</text>
-              <text x="392" y="90" fill="var(--muted-foreground)" fontFamily="ui-monospace, monospace" fontSize="8.5">MULTI-TENANT · CLOUD</text>
-              <rect x="364" y="108" width="54" height="16" rx="8" fill="var(--secondary)" />
-              <text x="391" y="119" textAnchor="middle" fill="var(--primary)" fontFamily="ui-monospace, monospace" fontSize="8.5" fontWeight="700">99.98% SLA</text>
+              <text x="392" y="76" fill="var(--foreground)" fontSize="12" fontWeight="700">Collections</text>
+              <text x="392" y="90" fill="var(--muted-foreground)" fontFamily="ui-monospace, monospace" fontSize="8.5">FIELD · BRANCH · UPI</text>
+              <rect x="364" y="108" width="60" height="16" rx="8" fill="var(--secondary)" />
+              <text x="394" y="119" textAnchor="middle" fill="var(--primary)" fontFamily="ui-monospace, monospace" fontSize="8.5" fontWeight="700">DPD BUCKETS</text>
             </g>
 
-            {/* Satellite 3: Process Automation */}
+            {/* Satellite 3: KYC & Risk */}
             <g className="animate-float" style={{ animationDelay: "0.5s" }} filter="url(#card-drop)">
               <rect x="24" y="334" width="168" height="86" rx="14" fill="var(--card)" stroke="var(--border)" strokeWidth="1.2" />
               <circle cx="48" cy="360" r="11" fill="var(--secondary)" />
               <circle cx="48" cy="360" r="4" fill="var(--primary)" />
-              <text x="68" y="358" fill="var(--foreground)" fontSize="12" fontWeight="700">Process Automation</text>
-              <text x="68" y="372" fill="var(--muted-foreground)" fontFamily="ui-monospace, monospace" fontSize="8.5">ZERO HANDOFFS</text>
+              <text x="68" y="358" fill="var(--foreground)" fontSize="12" fontWeight="700">KYC &amp; Risk</text>
+              <text x="68" y="372" fill="var(--muted-foreground)" fontFamily="ui-monospace, monospace" fontSize="8.5">BUREAU · SCORECARD</text>
               <g transform="translate(40, 392)">
-                <rect width="32" height="16" rx="4" fill="var(--secondary)" />
-                <text x="16" y="11" textAnchor="middle" fill="var(--foreground)" fontFamily="ui-monospace, monospace" fontSize="8">ERP</text>
-                <path d="M36 8 H52" stroke="var(--primary)" strokeWidth="1.5" strokeDasharray="3 3" className="animate-dash-flow" />
-                <rect x="56" width="38" height="16" rx="4" fill="var(--secondary)" />
-                <text x="75" y="11" textAnchor="middle" fill="var(--foreground)" fontFamily="ui-monospace, monospace" fontSize="8">SYNC</text>
-                <path d="M98 8 H114" stroke="var(--primary)" strokeWidth="1.5" strokeDasharray="3 3" className="animate-dash-flow" />
-                <circle cx="122" cy="8" r="6" fill="var(--primary)" className="animate-glow" />
+                <rect width="36" height="16" rx="4" fill="var(--secondary)" />
+                <text x="18" y="11" textAnchor="middle" fill="var(--foreground)" fontFamily="ui-monospace, monospace" fontSize="8">eKYC</text>
+                <path d="M40 8 H56" stroke="var(--primary)" strokeWidth="1.5" strokeDasharray="3 3" className="animate-dash-flow" />
+                <rect x="60" width="40" height="16" rx="4" fill="var(--secondary)" />
+                <text x="80" y="11" textAnchor="middle" fill="var(--foreground)" fontFamily="ui-monospace, monospace" fontSize="8">SCORE</text>
+                <path d="M104 8 H118" stroke="var(--primary)" strokeWidth="1.5" strokeDasharray="3 3" className="animate-dash-flow" />
+                <circle cx="126" cy="8" r="6" fill="var(--primary)" className="animate-glow" />
               </g>
             </g>
 
-            {/* Satellite 4: Flagship CREDEX NBFC Core */}
+            {/* Satellite 4: General Ledger */}
             <g className="animate-float" style={{ animationDelay: "1.3s" }} filter="url(#card-drop)">
               <rect x="336" y="330" width="180" height="94" rx="14" fill="var(--ink)" stroke="var(--primary)" strokeWidth="1.5" />
               <circle cx="352" cy="350" r="3" fill="var(--primary)" className="animate-glow" />
-              <text x="362" y="353" fill="var(--primary)" fontFamily="ui-monospace, monospace" fontSize="8" fontWeight="700" letterSpacing="0.14em">FLAGSHIP PRODUCT</text>
-              <text x="352" y="373" fill="#ffffff" fontSize="13" fontWeight="700">CREDEX Lending OS</text>
-              <text x="352" y="388" fill="#94a3b8" fontFamily="ui-monospace, monospace" fontSize="8.5">LOS · LMS · COLLECTIONS · GL</text>
+              <text x="362" y="353" fill="var(--primary)" fontFamily="ui-monospace, monospace" fontSize="8" fontWeight="700" letterSpacing="0.14em">INTEGRATED</text>
+              <text x="352" y="373" fill="#ffffff" fontSize="13" fontWeight="700">General Ledger</text>
+              <text x="352" y="388" fill="#94a3b8" fontFamily="ui-monospace, monospace" fontSize="8.5">TRIAL BALANCE · PAR · NPA</text>
               <rect x="352" y="398" width="148" height="5" rx="2.5" fill="#1e293b" />
               <rect x="352" y="398" width="112" height="5" rx="2.5" fill="var(--primary)" />
               <text x="352" y="416" fill="#e2e8f0" fontFamily="ui-monospace, monospace" fontSize="8">Gold · JLG · Vehicle · MSME</text>
             </g>
 
-            {/* Center Hub: NEURAFORGE Core */}
+            {/* Center Hub: CREDEX Core */}
             <g filter="url(#card-drop)">
               <circle cx="270" cy="240" r="68" fill="var(--primary)" fillOpacity="0.06" className="animate-glow" />
               <rect x="190" y="190" width="160" height="100" rx="22" fill="var(--card)" stroke="var(--primary)" strokeWidth="2" />
               <rect x="206" y="204" width="128" height="20" rx="10" fill="var(--secondary)" />
               <circle cx="220" cy="214" r="3.5" fill="var(--primary)" className="animate-glow" />
               <text x="276" y="217" textAnchor="middle" fill="var(--primary)" fontFamily="ui-monospace, monospace" fontSize="8" fontWeight="700" letterSpacing="0.12em">CORE STUDIO</text>
-              <text x="270" y="248" textAnchor="middle" fill="var(--foreground)" fontSize="15" fontWeight="700" letterSpacing="0.03em">NEURAFORGE</text>
+              <text x="270" y="248" textAnchor="middle" fill="var(--foreground)" fontSize="15" fontWeight="700" letterSpacing="0.08em">CREDEX</text>
               {/* Live build-activity equalizer */}
               <g transform="translate(240, 262)">
                 {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -189,7 +189,7 @@ export function HeroIllustration() {
             <p className="mt-0.5 font-display text-xs font-semibold text-foreground">Modular &amp; API-First</p>
           </div>
           <div className="rounded-lg border border-border bg-surface/70 px-2 py-2">
-            <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Flagship</p>
+            <p className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground">Platform</p>
             <p className="mt-0.5 font-display text-xs font-semibold text-primary">CREDEX NBFC OS</p>
           </div>
           <div className="rounded-lg border border-border bg-surface/70 px-2 py-2">

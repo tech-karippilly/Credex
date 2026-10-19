@@ -1,9 +1,9 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  ArrowRight, ArrowUpRight, Code2, Cloud, Landmark, Coins, Users, Car, Building2, Wallet, HandCoins,
+  ArrowRight, ArrowUpRight, Landmark, Coins, Users, Car, Building2, Wallet, HandCoins,
   Layers, ShieldCheck, UserPlus, Gauge, BadgeIndianRupee, RefreshCw,
   Settings2, Network, Zap, BarChart3, Rocket, FileCheck2, Database, Fingerprint,
-  Search, PenTool, Hammer, TrendingUp, Sparkles, CheckCircle2, Cpu,
+  Search, Sparkles, CheckCircle2, Cpu,
 } from "lucide-react";
 import { seo } from "@/lib/seo";
 import { company } from "@/lib/site";
@@ -18,49 +18,49 @@ import { ImpactStats } from "@/components/site/illustrations/ImpactStats";
 export const Route = createFileRoute("/")({
   head: () =>
     seo({
-      title: "NEURAFORGE | Software Development Team & NBFC Lending Platform",
+      title: "CREDEX | Next-Generation Lending OS for NBFCs & MFIs",
       description:
-        "NEURAFORGE builds custom software, SaaS and automation for businesses. Explore CREDEX — our flagship loan management platform for India's NBFCs and MFIs.",
+        "CREDEX is a next-generation lending operating system — unifying loan origination, KYC, branch & field collections, and the general ledger on one real-time core, purpose-built for India's NBFCs and MFIs.",
       path: "/",
     }),
   component: Home,
 });
 
 const heroMetrics = [
-  { value: "Full-Stack", label: "Web, Mobile, Cloud & APIs" },
-  { value: "6 Weeks", label: "Typical CREDEX NBFC Go-Live" },
+  { value: "Real-Time", label: "Unified Loan Core & Ledger" },
+  { value: "6 Weeks", label: "Typical NBFC Go-Live" },
   { value: "100% Audit", label: "Maker-Checker & RBI Aligned" },
 ];
 
 const whatWeDo = [
   {
-    icon: Code2,
-    tag: "01 // BESPOKE SYSTEMS",
-    title: "Custom software engineering",
-    text: "Web and mobile applications shaped around your exact workflows — from architecture and UX through launch and long-term engineering support.",
-    highlights: ["Domain-driven web & mobile apps", "Legacy ERP & core modernization", "High-throughput APIs & integrations"],
+    icon: Layers,
+    tag: "01 // UNIFIED CORE",
+    title: "One real-time loan record",
+    text: "Origination, KYC, disbursal, collections, branch cash, and the general ledger run on a single live core — no end-of-day spreadsheet reconciliation.",
+    highlights: ["Shared customer & accounting record", "Live book, PAR & NPA positions", "Zero reconciliation overhead"],
   },
   {
-    icon: Cloud,
-    tag: "02 // DIGITAL PRODUCTS",
-    title: "SaaS & multi-tenant platforms",
-    text: "Cloud-native products, partner portals, and real-time operational consoles engineered to scale cleanly with your users and roadmap.",
-    highlights: ["Multi-tenant role & billing engines", "Real-time analytics & operator dashboards", "Automated CI/CD & cloud resilience"],
+    icon: Network,
+    tag: "02 // BRANCH & FIELD OPS",
+    title: "Head office to the last mile",
+    text: "Branches, field officers, and head office operate on one ledger — with mobile collections, branch cash control, and center-meeting workflows built in.",
+    highlights: ["Mobile field collections & receipts", "Branch cash & vault control", "Role-based access for every team"],
   },
   {
-    icon: Landmark,
-    tag: "03 // REGULATED FINTECH",
-    title: "NBFC & lending systems",
-    text: "Deep experience in regulated financial software. Our flagship product, CREDEX, is a complete loan management operating system for Indian lenders.",
-    highlights: ["Origination, KYC & underwriting", "Field collections & branch cash", "Real-time integrated general ledger"],
+    icon: ShieldCheck,
+    tag: "03 // COMPLIANCE",
+    title: "RBI-ready governance",
+    text: "Regulatory reporting formats, immutable audit trails, and India data residency are first-class — so every disbursal stays inspection-ready.",
+    highlights: ["IRAC/NPA classification & KFS", "Immutable maker-checker logs", "India cloud residency"],
   },
 ];
 
 const approach = [
-  { icon: Search, step: "01", title: "Understand", text: "We map how your branches, ops teams, and customers actually work before proposing architecture." },
-  { icon: PenTool, step: "02", title: "Design", text: "Clean interfaces, strict data models, and milestone plans your stakeholders can verify early." },
-  { icon: Hammer, step: "03", title: "Build", text: "Modern type-safe stacks, automated QA suites, and clean documentation ready for scale." },
-  { icon: TrendingUp, step: "04", title: "Improve", text: "Post-launch telemetry, performance tuning, and iterative feature rollouts as your volume grows." },
+  { icon: Search, step: "01", title: "Discover", text: "We map your loan products, branches, and operating model to configure CREDEX to how you already work." },
+  { icon: Settings2, step: "02", title: "Configure", text: "Schemes, interest slabs, approval hierarchies, and reports set up without vendor tickets or custom code." },
+  { icon: Database, step: "03", title: "Migrate", text: "Structured, validated migration of your existing book, customers, and ledgers with reconciliation checks." },
+  { icon: Rocket, step: "04", title: "Go-Live", text: "Branch rollout, team training, and hands-on support — most lenders are live in as little as six weeks." },
 ];
 
 const builtFor = ["Gold-loan NBFCs", "MFIs & SFBs", "Vehicle finance", "Housing & asset lenders", "MSME & business books", "Multi-branch lenders"];
@@ -119,15 +119,15 @@ function Home() {
               <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.06] py-1 pl-1 pr-3.5 font-mono text-xs font-medium text-primary animate-rise">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-primary px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-primary-foreground">
                   <Sparkles className="h-3 w-3" />
-                  Studio
+                  Lending OS
                 </span>
-                <span className="text-foreground/70">Software engineering &amp; fintech product lab</span>
+                <span className="text-foreground/70">Purpose-built for India&apos;s NBFCs &amp; MFIs</span>
               </div>
 
               <h1 className="mt-5 text-[2.5rem] font-semibold leading-[0.98] tracking-[-0.035em] text-foreground animate-rise sm:text-5xl lg:text-[3.6rem]">
-                Engineering modern software that powers{" "}
+                The next-generation lending OS for{" "}
                 <span className="relative whitespace-nowrap">
-                  <span className="text-gradient">real operations</span>
+                  <span className="text-gradient">modern NBFCs</span>
                   <svg
                     className="absolute -bottom-1 left-0 h-2 w-full text-primary/35"
                     viewBox="0 0 300 12"
@@ -142,16 +142,16 @@ function Home() {
               </h1>
 
               <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground animate-rise">
-                <strong className="font-semibold text-foreground">{company.brand}</strong> designs and builds custom applications, cloud SaaS, and workflow automation for ambitious businesses — and we build <strong className="font-semibold text-primary">CREDEX</strong>, our flagship loan management platform for India&apos;s NBFCs and MFIs.
+                <strong className="font-semibold text-primary">{company.brand}</strong> runs your entire loan book on one real-time core — origination, KYC, branch &amp; field collections, and an integrated general ledger — engineered for India&apos;s lenders across gold, vehicle, group, property, and MSME credit.
               </p>
 
               <div className="mt-8 flex flex-wrap items-center gap-3.5 animate-rise">
                 <Link to="/contact" className="btn btn-primary group">
-                  Start a project
+                  Book a live demo
                   <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
                 <a href="#flagship-credex" className="btn btn-outline">
-                  Explore CREDEX Lending OS
+                  Explore the platform
                 </a>
               </div>
 
@@ -177,9 +177,9 @@ function Home() {
       <section className="container-site py-24">
         <Reveal>
           <SectionHeading
-            eyebrow="Engineering capabilities"
-            title="Software architecture built for longevity and scale."
-            text="We partner with founders, COOs, and financial institutions to replace brittle spreadsheets and disconnected tools with clean, unified software."
+            eyebrow="Why CREDEX"
+            title="One platform for every lending workflow."
+            text="CREDEX replaces brittle spreadsheets and disconnected tools with a single, unified operating system — from the branch counter to the general ledger."
           />
         </Reveal>
 
@@ -222,9 +222,9 @@ function Home() {
           <Reveal>
             <SectionHeading
               center
-              eyebrow="Delivery blueprint"
-              title="Understand. Design. Build. Improve."
-              text="A transparent engineering cadence — whether we are shipping your custom enterprise platform or rolling out CREDEX across your branches."
+              eyebrow="Implementation"
+              title="From kickoff to go-live in weeks."
+              text="A transparent rollout cadence — we configure CREDEX to your loan products, migrate your existing book, and get every branch live with hands-on support."
             />
           </Reveal>
           <WorkflowPipeline />
@@ -272,7 +272,7 @@ function Home() {
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-1.5 font-mono text-xs font-semibold uppercase tracking-widest text-amber-300">
                 <Cpu className="h-3.5 w-3.5 text-primary" />
-                <span>Flagship Product // CREDEX OS</span>
+                <span>The Platform // CREDEX OS</span>
               </div>
 
               <h2 className="mt-5 font-display text-3xl font-semibold leading-[1.08] text-white sm:text-4xl md:text-5xl">
@@ -464,9 +464,9 @@ function Home() {
       </section>
 
       <CtaBand
-        title="Building custom software or evaluating CREDEX?"
-        text="Tell us about a bespoke product build, or book a live walkthrough of our NBFC loan management platform — our engineering team will tailor the session to your roadmap."
-        cta="Talk to NEURAFORGE"
+        title="Ready to modernize your lending stack?"
+        text="Book a live walkthrough of CREDEX — we'll tailor the session to your loan products, branch network, and reporting needs."
+        cta="Talk to the CREDEX team"
       />
     </>
   );

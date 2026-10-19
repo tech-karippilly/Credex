@@ -23,9 +23,9 @@ export const siteIconLinks = [
 ] as const;
 
 export const company = {
-  legalName: "NEURAFORGE",
-  brand: "NEURAFORGE",
-  tagline: "Software development. Products that scale.",
+  legalName: "CREDEX",
+  brand: "CREDEX",
+  tagline: "The next-generation lending OS for India's NBFCs & MFIs.",
   website: "credexfin.com",
   cin: "U62099KL2026PTC106127",
   location: "Irinjalakuda, Thrissur, Kerala, India",
@@ -33,9 +33,9 @@ export const company = {
 
 export const nav = [
   { to: "/", label: "Home" },
-  { to: "/about", label: "About" },
-  { to: "/services", label: "Services" },
-  { to: "/solutions", label: "Solutions" },
+  { to: "/services", label: "Platform" },
+  { to: "/solutions", label: "Modules" },
+  { to: "/about", label: "Company" },
   { to: "/careers", label: "Careers" },
   { to: "/contact", label: "Contact" },
 ] as const;

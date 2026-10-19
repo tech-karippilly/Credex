@@ -13,7 +13,7 @@ export function Logo({ inverted = false }: { inverted?: boolean }) {
             fill="var(--primary)"
           />
           <path
-            d="M10.5 21.5V10.5L21.5 21.5V10.5"
+            d="M21.5 11.2a7 7 0 1 0 0 9.6"
             stroke="#fff"
             strokeWidth="2.8"
             strokeLinecap="round"
@@ -27,7 +27,7 @@ export function Logo({ inverted = false }: { inverted?: boolean }) {
           inverted ? "text-ink-foreground" : "text-foreground"
         }`}
       >
-        NEURA<span className="text-primary">FORGE</span>
+        CRED<span className="text-primary">EX</span>
       </span>
     </span>
   );
