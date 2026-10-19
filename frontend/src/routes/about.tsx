@@ -11,8 +11,8 @@ import { Team } from "@/components/site/Team";
 export const Route = createFileRoute("/about")({
   head: () =>
     seo({
-      title: "About Credex | Software Development Company in Kerala",
-      description: "Credex.In is a technology company in Moonupeedika, Thrissur, Kerala, building the lending OS for India's NBFCs and MFIs.",
+      title: "About CREDEX | The Lending OS Team in Kerala",
+      description: "CREDEX is a next-generation lending operating system built in Irinjalakuda, Thrissur, Kerala, for India's NBFCs and MFIs.",
       path: "/about",
     }),
   component: About,
@@ -20,8 +20,8 @@ export const Route = createFileRoute("/about")({
 
 const stats = [
   { value: "10+", label: "Engineers, designers & QA" },
-  { value: "6 wk", label: "Typical CREDEX go-live" },
-  { value: "1", label: "Flagship lending platform" },
+  { value: "6 wk", label: "Typical NBFC go-live" },
+  { value: "1", label: "Unified lending platform" },
   { value: "100%", label: "India-hosted & audit-ready" },
 ];
 
@@ -35,40 +35,40 @@ const values = [
 ];
 
 const focus = [
-  { icon: Code2, label: "Custom software development" },
-  { icon: Cloud, label: "SaaS platforms" },
-  { icon: Boxes, label: "Web & digital applications" },
-  { icon: Workflow, label: "Business automation" },
-  { icon: Database, label: "Data & technology solutions" },
-  { icon: Landmark, label: "NBFC & lending systems" },
+  { icon: Code2, label: "Configurable loan schemes" },
+  { icon: Cloud, label: "Cloud-native & India-hosted" },
+  { icon: Boxes, label: "Modular lending engines" },
+  { icon: Workflow, label: "Automated loan lifecycle" },
+  { icon: Database, label: "Real-time general ledger" },
+  { icon: Landmark, label: "NBFC & MFI focused" },
 ];
 
 const choose = [
-  { t: "Business-first thinking", d: "We begin with your problem, not with a technology." },
-  { t: "Practical solutions", d: "We build what is useful, reliable and maintainable." },
-  { t: "Clear communication", d: "You always know where your project stands." },
-  { t: "Built to grow", d: "Solutions designed to scale with your business." },
+  { t: "Lending-first thinking", d: "We begin with your loan products and branch reality, not generic software." },
+  { t: "Reliable by design", d: "A single real-time core built to be dependable and maintainable." },
+  { t: "Clear communication", d: "You always know where your rollout stands." },
+  { t: "Built to grow", d: "Add products and branches without re-platforming." },
 ];
 
 function About() {
   return (
     <>
       <PageHero
-        eyebrow="About Credex.In"
-        title="A software team that ships real products."
-        text="We design and build custom software, SaaS and automation — and we run CREDEX, our loan management platform for India's NBFCs and MFIs."
+        eyebrow="About CREDEX"
+        title="The team building India's next-generation lending OS."
+        text="CREDEX is a modern loan management operating system for India's NBFCs and MFIs — unifying origination, collections and the general ledger on one real-time core."
       />
 
       {/* Who We Are — text + facts panel (no image) */}
       <section className="container-site py-20 md:py-24">
         <div className="grid items-center gap-14 lg:grid-cols-[1.1fr_1fr]">
           <Reveal>
-            <SectionHeading eyebrow="Who We Are" title="A technology partner for growing businesses" />
+            <SectionHeading eyebrow="Who We Are" title="A product team for India's lenders" />
             <p className="mt-6 text-lg leading-relaxed text-muted-foreground">
-              {company.brand} is a software company based in Moonupeedika, Thrissur, Kerala, focused on building the lending operating system for India&apos;s NBFCs and MFIs — origination, collections and the ledger on one platform.
+              {company.brand} is a lending-technology company based in Irinjalakuda, Thrissur, Kerala, building the operating system for India&apos;s NBFCs and MFIs — origination, collections and the ledger on one real-time platform.
             </p>
             <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
-              We work closely with businesses to understand how they operate, then design and build technology that removes friction, saves time and creates measurable value.
+              We work closely with lenders to understand how their branches and field teams actually operate, then shape CREDEX to remove friction, enforce controls, and create measurable value.
             </p>
           </Reveal>
 
@@ -93,7 +93,7 @@ function About() {
                 ))}
               </div>
               <p className="relative mt-5 font-mono text-xs text-muted-foreground">
-                HQ · Moonupeedika, Thrissur, Kerala
+                HQ · Irinjalakuda, Thrissur, Kerala
               </p>
             </div>
           </Reveal>
@@ -104,8 +104,8 @@ function About() {
       <section className="border-y border-border bg-surface/70">
         <div className="container-site grid gap-6 py-20 md:grid-cols-2">
           {[
-            { icon: Target, label: "Mission", text: "To build practical technology solutions that solve real business problems and create measurable value." },
-            { icon: Eye, label: "Vision", text: "To become a trusted technology partner for businesses looking to simplify, transform and grow through technology." },
+            { icon: Target, label: "Mission", text: "To give every lender a modern, reliable operating system that makes lending faster, safer and fully auditable." },
+            { icon: Eye, label: "Vision", text: "To become the default lending OS for India's NBFCs and MFIs — from single-branch lenders to multi-product books." },
           ].map((m, i) => (
             <Reveal key={m.label} delay={i * 90}>
               <div className="card-bento h-full p-9">
@@ -150,8 +150,8 @@ function About() {
           <Reveal>
             <SectionHeading
               eyebrow="Our Approach"
-              title="Understand. Plan. Build. Launch. Improve."
-              text="We take time to understand your business before writing a line of code — then deliver in clear stages, with continuous improvement after launch."
+              title="Understand. Configure. Migrate. Go live. Improve."
+              text="We take time to understand your loan products and operating model before rollout — then deliver in clear stages, with continuous improvement after go-live."
             />
           </Reveal>
           <Reveal delay={120}>
@@ -173,7 +173,7 @@ function About() {
       {/* Why Businesses Choose Us */}
       <section className="container-site py-24">
         <Reveal>
-          <SectionHeading eyebrow="Why Businesses Choose Us" title="A serious, modern technology partner" />
+          <SectionHeading eyebrow="Why Lenders Choose Us" title="A serious, modern lending-tech partner" />
         </Reveal>
         <div className="mt-12 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
           {choose.map((c, i) => (
@@ -193,7 +193,7 @@ function About() {
 
       <Team />
 
-      <CtaBand title="Let's talk about your business." text="Share your challenge and we'll explore how technology can help." cta="Get in Touch" />
+      <CtaBand title="Let's talk about your lending book." text="Share how you lend today and we'll show you how CREDEX fits." cta="Get in Touch" />
     </>
   );
 }

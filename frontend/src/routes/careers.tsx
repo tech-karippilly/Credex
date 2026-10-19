@@ -10,14 +10,14 @@ import { ApplyForm } from "@/components/site/forms";
 export const Route = createFileRoute("/careers")({
   head: () =>
     seo({
-      title: "Careers at Credex | Jobs in Moonupeedika, Thrissur, Kerala",
-      description: "Build your career with Credex.In. Openings for fullstack developers, UI/UX designers, marketing & sales, and junior/fresher fullstack programmers in Thrissur, Kerala.",
+      title: "Careers at CREDEX | Jobs in Irinjalakuda, Thrissur, Kerala",
+      description: "Build your career with CREDEX. Openings for fullstack developers, UI/UX designers, marketing & sales, and junior/fresher fullstack programmers in Thrissur, Kerala.",
       path: "/careers",
     }),
   component: Careers,
 });
 
-const LOCATION = "Moonupeedika, Thrissur, Kerala";
+const LOCATION = "Irinjalakuda, Thrissur, Kerala";
 
 const FALLBACK_JOBS: JobRow[] = [
   {
@@ -75,7 +75,7 @@ const FALLBACK_JOBS: JobRow[] = [
     workplace: "On-site",
     salary: "",
     responsibilities: [
-      "Generate and qualify leads for our software services and CREDEX platform.",
+      "Generate and qualify leads for the CREDEX lending platform.",
       "Run outreach, demos and follow-ups with prospective clients.",
       "Support digital marketing, content and campaign efforts.",
       "Maintain the pipeline and report on conversions.",
@@ -129,7 +129,7 @@ function Careers() {
 
   return (
     <>
-      <PageHero eyebrow="Careers" title="Build Your Career With Credex" text="We're building a team that believes technology should solve real problems and create real value — software, design, product and growth roles in Thrissur, Kerala." />
+      <PageHero eyebrow="Careers" title="Build Your Career With CREDEX" text="We're building the team behind India's next-generation lending OS — engineering, design, product and growth roles in Thrissur, Kerala." />
 
       <section className="container-site py-20">
         <div className="flex flex-wrap items-end justify-between gap-4">

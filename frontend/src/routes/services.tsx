@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
-  ArrowRight, ArrowUpRight, Code2, Smartphone, Globe, Cloud, Landmark, Workflow,
+  ArrowUpRight, Code2, Smartphone, Globe, Cloud, Landmark, Workflow,
   PenTool, ShieldCheck, Database, Plug, LifeBuoy, Cpu, Check,
 } from "lucide-react";
 import { seo } from "@/lib/seo";
@@ -9,9 +9,9 @@ import { CtaBand, PageHero, SectionHeading, Reveal } from "@/components/site/blo
 export const Route = createFileRoute("/services")({
   head: () =>
     seo({
-      title: "Services | Software, Mobile, Web, Cloud & Automation — Credex.In",
+      title: "Platform | The CREDEX Lending OS Capabilities",
       description:
-        "End-to-end software services from Credex.In: custom software development, mobile app development, web platforms, SaaS, cloud & DevOps, UI/UX, QA, automation, API integration, fintech and ongoing support.",
+        "Everything inside CREDEX: loan origination, loan management, mobile field collections, integrated general ledger, compliance & RBI reporting, integrations, analytics and more — one unified lending operating system.",
       path: "/services",
     }),
   component: Services,
@@ -19,104 +19,104 @@ export const Route = createFileRoute("/services")({
 
 const services = [
   {
-    id: "software",
-    icon: Code2,
-    title: "Custom software development",
-    text: "Bespoke applications engineered around your exact workflows — from architecture and discovery to launch and long-term support.",
-    tags: ["Enterprise apps", "Internal tools", "Legacy modernization"],
+    id: "origination",
+    icon: Workflow,
+    title: "Loan origination (LOS)",
+    text: "Lead-to-sanction origination with paperless KYC, bureau pulls, collateral checks and multi-tier credit workflows.",
+    tags: ["eKYC & CKYC", "Bureau scorecards", "Multi-tier sanction"],
   },
   {
-    id: "mobile",
+    id: "lms",
+    icon: Landmark,
+    title: "Loan management (LMS)",
+    text: "The servicing core — dynamic EMI schedules, interest accrual, foreclosure, restructuring and part-payments.",
+    tags: ["EMI schedules", "Foreclosure", "Restructuring"],
+  },
+  {
+    id: "collections",
     icon: Smartphone,
-    title: "Mobile app development",
-    text: "Native and cross-platform iOS & Android apps with offline support, push, and app-store delivery handled end to end.",
-    tags: ["iOS & Android", "React Native / Flutter", "Field & ops apps"],
+    title: "Mobile field collections",
+    text: "A field officer app for door-step recovery with digital receipts, promise-to-pay and offline sync.",
+    tags: ["Field receipts", "Promise-to-pay", "Offline sync"],
   },
   {
-    id: "web",
-    icon: Globe,
-    title: "Web application development",
-    text: "Fast, responsive, SEO-ready web platforms, portals and dashboards built on modern type-safe stacks.",
-    tags: ["Portals & dashboards", "Marketing sites", "Progressive web apps"],
-  },
-  {
-    id: "saas",
-    icon: Cloud,
-    title: "SaaS product engineering",
-    text: "Multi-tenant platforms with roles, billing, and real-time analytics — engineered to scale cleanly with your users.",
-    tags: ["Multi-tenancy", "Subscription billing", "Admin consoles"],
+    id: "ledger",
+    icon: Database,
+    title: "Integrated general ledger",
+    text: "A real-time GL where every disbursal, receipt and voucher posts automatically — no spreadsheet reconciliation.",
+    tags: ["Real-time GL", "Trial balance", "Auto vouchers"],
   },
   {
     id: "cloud",
-    icon: Cpu,
-    title: "Cloud & DevOps",
-    text: "Cloud architecture, containerization, CI/CD pipelines and observability so releases are fast, safe and repeatable.",
-    tags: ["AWS / Azure / GCP", "Docker & CI/CD", "Monitoring & scaling"],
+    icon: Cloud,
+    title: "Cloud & data residency",
+    text: "Hosted on tier-1 Indian cloud regions with encryption at rest and in transit, and high-availability by default.",
+    tags: ["India-hosted", "Encrypted", "High availability"],
   },
   {
-    id: "design",
-    icon: PenTool,
-    title: "UI/UX design",
-    text: "Research-led product design — clean interfaces, design systems and prototypes your stakeholders can validate early.",
-    tags: ["Design systems", "Prototyping", "Usability testing"],
-  },
-  {
-    id: "automation",
-    icon: Workflow,
-    title: "Business process automation",
-    text: "Replace manual handoffs and spreadsheets with automated workflows that connect your existing tools.",
-    tags: ["Workflow engines", "Document automation", "No manual rekeying"],
-  },
-  {
-    id: "integration",
-    icon: Plug,
-    title: "API development & integration",
-    text: "Robust APIs and third-party integrations — payments, KYC, messaging, ERPs and bureaus — wired into one system.",
-    tags: ["REST & GraphQL", "Payment & KYC", "ERP / CRM sync"],
-  },
-  {
-    id: "data",
-    icon: Database,
-    title: "Data & analytics solutions",
-    text: "Data pipelines, warehousing and dashboards that turn operational data into decisions and MIS reporting.",
-    tags: ["Pipelines & ETL", "BI dashboards", "Reporting & MIS"],
-  },
-  {
-    id: "fintech",
-    icon: Landmark,
-    title: "NBFC & lending systems",
-    text: "Regulated financial software and our flagship CREDEX loan management platform for India's NBFCs and MFIs.",
-    tags: ["Loan origination (LOS)", "Loan management (LMS)", "RBI-ready reporting"],
-  },
-  {
-    id: "qa",
+    id: "compliance",
     icon: ShieldCheck,
-    title: "QA & test automation",
-    text: "Manual and automated QA, regression suites and release testing so every ship is reliable and defensible.",
-    tags: ["Automated regression", "Load & security testing", "Release QA"],
+    title: "Compliance & reporting",
+    text: "RBI-aligned classification and returns, KFS generation and immutable maker-checker audit trails out of the box.",
+    tags: ["IRAC / NPA", "KFS & returns", "Maker-checker logs"],
+  },
+  {
+    id: "integrations",
+    icon: Plug,
+    title: "Integrations & APIs",
+    text: "Payments, NACH/UPI, KYC, bureaus and messaging wired into one system through robust, documented APIs.",
+    tags: ["NACH / UPI", "KYC & bureau", "REST APIs"],
+  },
+  {
+    id: "config",
+    icon: Code2,
+    title: "Configurable products",
+    text: "Launch new loan schemes, interest slabs and rules yourself — no vendor tickets, no custom code.",
+    tags: ["Loan schemes", "Interest slabs", "Rule engine"],
+  },
+  {
+    id: "branch",
+    icon: Globe,
+    title: "Multi-branch & roles",
+    text: "Branches, field officers and head office on one ledger, with branch cash control and strict role-based access.",
+    tags: ["Branch cash", "Role-based access", "Approval hierarchy"],
+  },
+  {
+    id: "analytics",
+    icon: Cpu,
+    title: "Analytics & MIS",
+    text: "Live portfolio health, PAR and NPA positions, and branch MIS dashboards for every stakeholder.",
+    tags: ["PAR & NPA", "Branch MIS", "Portfolio dashboards"],
+  },
+  {
+    id: "onboarding",
+    icon: PenTool,
+    title: "Customer onboarding",
+    text: "Deduplicated, paperless customer onboarding with co-applicants, guarantors and group/center structures.",
+    tags: ["Paperless KYC", "Dedup profiles", "Groups & co-applicants"],
   },
   {
     id: "support",
     icon: LifeBuoy,
-    title: "Maintenance & support",
-    text: "Ongoing engineering, performance tuning and feature rollouts long after go-live — we stay engaged.",
-    tags: ["SLA support", "Performance tuning", "Feature iterations"],
+    title: "Implementation & support",
+    text: "Structured data migration, team training and SLA-backed support — before, during and long after go-live.",
+    tags: ["Data migration", "Team training", "SLA support"],
   },
 ];
 
 const engagement = [
-  { step: "01", title: "Dedicated team", text: "An embedded squad that works as an extension of your business." },
-  { step: "02", title: "Fixed-scope project", text: "A defined deliverable, timeline and budget for a clear outcome." },
-  { step: "03", title: "Product partnership", text: "We co-build and evolve your product over the long term." },
+  { step: "01", title: "Hosted SaaS", text: "We run CREDEX on secure Indian cloud — you simply log in and lend." },
+  { step: "02", title: "Guided migration", text: "We migrate your existing book, customers and ledgers with full reconciliation." },
+  { step: "03", title: "Ongoing partnership", text: "Updates, new modules and support as your book and products grow." },
 ];
 
 function Services() {
   return (
     <>
       <PageHero
-        eyebrow="Services"
-        title="Every kind of software your business needs."
-        text="From custom software and mobile apps to SaaS, cloud, automation and regulated fintech — one engineering team across the full build lifecycle."
+        eyebrow="Platform"
+        title="Everything a modern lender needs, in one OS."
+        text="From origination and collections to the general ledger and RBI reporting — CREDEX runs the entire lending lifecycle on a single real-time core."
       >
         <nav aria-label="Services" className="flex flex-wrap gap-2">
           {services.slice(0, 6).map((s) => (
@@ -136,8 +136,8 @@ function Services() {
         <Reveal>
           <SectionHeading
             eyebrow="Capabilities"
-            title="A full-stack software partner."
-            text="Pick a single service or an end-to-end build — every engagement shares the same engineering standards, documentation and long-term support."
+            title="One platform, every lending workflow."
+            text="Run a single credit line or a multi-product book — every capability shares the same customer, cash and ledger core."
           />
         </Reveal>
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
@@ -168,7 +168,7 @@ function Services() {
                   to="/contact"
                   className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-primary"
                 >
-                  Discuss this service
+                  Explore this capability
                   <ArrowUpRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                 </Link>
               </article>
@@ -183,9 +183,9 @@ function Services() {
           <Reveal>
             <SectionHeading
               center
-              eyebrow="How we engage"
-              title="Work with us the way that fits."
-              text="Whether you need a full product team, a fixed deliverable, or a long-term partner — we shape the engagement around your goals."
+              eyebrow="How we deliver"
+              title="Adopt CREDEX the way that fits."
+              text="From hosted SaaS to guided migration and a long-term partnership — we shape the rollout around your book and branches."
             />
           </Reveal>
           <div className="mt-14 grid gap-5 md:grid-cols-3">
@@ -202,7 +202,7 @@ function Services() {
 
           <Reveal delay={120}>
             <div className="mt-10 flex flex-wrap items-center justify-center gap-3 text-center">
-              {["Discovery", "Design", "Build", "Test", "Launch", "Support"].map((p) => (
+              {["Discovery", "Configure", "Migrate", "Train", "Go-live", "Support"].map((p) => (
                 <span key={p} className="inline-flex items-center gap-2 font-mono text-xs text-muted-foreground">
                   <Check className="h-4 w-4 text-primary" />
                   {p}
@@ -214,9 +214,9 @@ function Services() {
       </section>
 
       <CtaBand
-        title="Not sure which service fits?"
-        text="Tell us about your business and we'll recommend a practical starting point — from a quick build to a full product partnership."
-        cta="Discuss Your Requirement"
+        title="See the platform in action."
+        text="Tell us how you lend today and we'll tailor a live CREDEX walkthrough to your loan products and branch network."
+        cta="Book a Demo"
       />
     </>
   );

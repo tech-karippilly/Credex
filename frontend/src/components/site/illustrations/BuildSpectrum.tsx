@@ -23,7 +23,7 @@ export function BuildSpectrum() {
         <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
           Delivery Pipeline
         </span>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-500/12 px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
           Continuous
         </span>

@@ -48,11 +48,11 @@ export const Route = createFileRoute("/admin")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: "Admin — Credex" },
-      { name: "description", content: "Credex website administration." },
+      { title: "Admin — CREDEX" },
+      { name: "description", content: "CREDEX website administration." },
       { name: "robots", content: "noindex, nofollow" },
-      { property: "og:title", content: "Admin — Credex" },
-      { property: "og:description", content: "Credex website administration." },
+      { property: "og:title", content: "Admin — CREDEX" },
+      { property: "og:description", content: "CREDEX website administration." },
       { property: "og:image", content: OG_IMAGE_URL },
     ],
     links: [...siteIconLinks],

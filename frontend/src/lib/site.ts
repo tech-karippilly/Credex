@@ -23,20 +23,20 @@ export const siteIconLinks = [
 ] as const;
 
 export const company = {
-  legalName: "CREDEX.IN",
-  brand: "Credex.In",
-  tagline: "Software development. Products that scale.",
+  legalName: "CREDEX",
+  brand: "CREDEX",
+  tagline: "The next-generation lending OS for India's NBFCs & MFIs.",
   website: "credexfin.com",
   cin: "U62099KL2026PTC106127",
-  location: "Moonupeedika, Thrissur, Kerala, India",
+  location: "Irinjalakuda, Thrissur, Kerala, India",
 };
 
 export const nav = [
   { to: "/", label: "Home" },
-  { to: "/about", label: "About" },
+  { to: "/services", label: "Platform" },
+  { to: "/solutions", label: "Modules" },
+  { to: "/about", label: "Company" },
   { to: "/team", label: "Team" },
-  { to: "/services", label: "Services" },
-  { to: "/solutions", label: "Solutions" },
   { to: "/careers", label: "Careers" },
   { to: "/contact", label: "Contact" },
 ] as const;

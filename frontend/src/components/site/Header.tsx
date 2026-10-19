@@ -21,7 +21,7 @@ export function Header() {
         Skip to content
       </a>
       <div className="container-site flex h-[72px] items-center justify-between gap-6">
-        <Link to="/" aria-label="Credex.In — Home" onClick={() => setOpen(false)}>
+        <Link to="/" aria-label="CREDEX — Home" onClick={() => setOpen(false)}>
           <Logo />
         </Link>
         <nav aria-label="Main" className="hidden lg:block">

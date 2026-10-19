@@ -15,7 +15,7 @@ export function TrustShieldArt() {
               <span className="font-display text-sm font-semibold text-foreground">
                 Regulatory &amp; Security Posture
               </span>
-              <span className="rounded-full bg-emerald-500/12 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-700">
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-wider text-emerald-400">
                 VERIFIED
               </span>
             </div>
