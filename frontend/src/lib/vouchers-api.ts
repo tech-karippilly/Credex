@@ -17,6 +17,47 @@ export type VoucherDocument = {
   mimeType: string;
 };
 
+export type VoucherSettlementStatus = "UNPAID" | "PARTIALLY_PAID" | "PAID";
+
+export type VoucherDeliveryAttempt = {
+  channel: "EMAIL" | "WHATSAPP";
+  recipient: string;
+  status: "ACCEPTED" | "DELIVERED" | "FAILED";
+  providerMessageId?: string;
+  errorSummary?: string;
+  attemptedAt: string;
+};
+
+export type VoucherExpenseSummary = {
+  id: string;
+  expenseName: string;
+  amount: number;
+  invoiceDate: string | null;
+};
+
+export type VoucherExpenseDetail = VoucherExpenseSummary & {
+  paidBy: string;
+  category: { id: string; name: string } | null;
+  notes: string;
+  receivedDate: string | null;
+  receipt: VoucherDocument | null;
+};
+
+export type VoucherPaymentHistoryItem = {
+  id: string;
+  paymentNumber: string;
+  paymentDate: string;
+  paymentMethod: PaymentMode | string;
+  status: string;
+  allocatedAmount: number;
+  paymentAmount: number;
+  referenceNumber: string;
+  chequeNumber: string;
+  chequeDate: string | null;
+  transferMethod: string;
+  sourceAccount: string;
+};
+
 export type Voucher = {
   id: string;
   voucherNumber: string;
@@ -30,13 +71,14 @@ export type Voucher = {
   amountPaid: number;
   outstandingAmount: number;
   availableToAllocate: number;
-  settlementStatus: "UNPAID" | "PARTIALLY_PAID" | "PAID";
+  amountReserved?: number;
+  settlementStatus: VoucherSettlementStatus;
   currency: string;
   paymentMode: PaymentMode;
   categoryId: string | null;
   category: { id: string; name: string } | null;
   expenseId: string | null;
-  expense: { id: string; expenseName: string; amount: number } | null;
+  expense: VoucherExpenseSummary | null;
   referenceNumber: string;
   notes: string;
   document: VoucherDocument | null;
@@ -45,8 +87,23 @@ export type Voucher = {
   updatedAt: string;
 };
 
+export type VoucherDetail = Omit<Voucher, "expense"> & {
+  amountReserved: number;
+  expense: VoucherExpenseDetail | null;
+  payments: VoucherPaymentHistoryItem[];
+  deliveryAttempts: VoucherDeliveryAttempt[];
+};
+
+export type VoucherSettlementCounts = {
+  unpaid: number;
+  partiallyPaid: number;
+  paid: number;
+  totalOutstandingAmount: number;
+};
+
 export type VoucherListResult = {
   items: Voucher[];
+  settlementCounts: VoucherSettlementCounts;
   pagination: {
     page: number;
     limit: number;
@@ -76,15 +133,6 @@ export type UpdateVoucherRequest = Partial<CreateVoucherRequest> & {
   expenseId?: string | null;
 };
 
-export type VoucherDeliveryAttempt = {
-  channel: "EMAIL" | "WHATSAPP";
-  recipient: string;
-  status: "ACCEPTED" | "DELIVERED" | "FAILED";
-  providerMessageId?: string;
-  errorSummary?: string;
-  attemptedAt: string;
-};
-
 export type VoucherShareResult = {
   voucher: Voucher;
   deliveryAttempt: VoucherDeliveryAttempt;
@@ -104,6 +152,7 @@ export type VoucherListParams = {
   search?: string;
   voucherType?: VoucherType;
   status?: VoucherStatus;
+  settlementStatus?: VoucherSettlementStatus;
   paymentMode?: PaymentMode;
   categoryId?: string;
   from?: string;
@@ -118,6 +167,7 @@ export const vouchersApi = {
     if (params?.search) search.set("search", params.search);
     if (params?.voucherType) search.set("voucherType", params.voucherType);
     if (params?.status) search.set("status", params.status);
+    if (params?.settlementStatus) search.set("settlementStatus", params.settlementStatus);
     if (params?.paymentMode) search.set("paymentMode", params.paymentMode);
     if (params?.categoryId) search.set("categoryId", params.categoryId);
     if (params?.from) search.set("from", params.from);
@@ -130,8 +180,8 @@ export const vouchersApi = {
     });
   },
 
-  get(id: string): Promise<Voucher> {
-    return apiRequest<Voucher>(`/vouchers/${id}`, { auth: true });
+  get(id: string): Promise<VoucherDetail> {
+    return apiRequest<VoucherDetail>(`/vouchers/${id}`, { auth: true });
   },
 
   create(payload: CreateVoucherRequest): Promise<Voucher> {

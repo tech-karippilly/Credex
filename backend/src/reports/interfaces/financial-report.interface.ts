@@ -38,7 +38,10 @@ export interface PaymentMethodGroup extends ReportGroup {
 
 export interface ExpenseReportItem {
   id: string;
+  /** Supplier invoice date (same as invoiceDate; kept for compatibility). */
   date: string;
+  invoiceDate: string;
+  receivedDate: string | null;
   expenseName: string;
   categoryId: string;
   categoryName: string;

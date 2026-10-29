@@ -20,9 +20,9 @@ const QUEUE = [
 ];
 
 export function LendingConsole() {
-  const { ref, inView } = useReveal<HTMLDivElement>();
-  const book = useCountUp(4.82, inView);
-  const efficiency = useCountUp(98.6, inView);
+  const { ref, inView, animateCount } = useReveal<HTMLDivElement>();
+  const book = useCountUp(4.82, animateCount);
+  const efficiency = useCountUp(98.6, animateCount);
   const [active, setActive] = useState(0);
 
   useEffect(() => {
@@ -67,7 +67,6 @@ export function LendingConsole() {
             <circle cx="70" cy="70" r={R} fill="none" stroke="var(--border)" strokeWidth="12" />
             {SEGMENTS.map((seg) => {
               const len = seg.pct * C;
-              const dashoffset = inView ? 0 : len;
               const rotate = cumulative * 360;
               cumulative += seg.pct;
               return (
@@ -81,11 +80,10 @@ export function LendingConsole() {
                   strokeWidth="12"
                   strokeLinecap="round"
                   strokeDasharray={`${len} ${C - len}`}
-                  strokeDashoffset={dashoffset}
+                  strokeDashoffset={0}
                   style={{
                     transformOrigin: "center",
                     transform: `rotate(${rotate}deg)`,
-                    transition: "stroke-dashoffset .9s cubic-bezier(.2,.7,.2,1)",
                   }}
                 />
               );

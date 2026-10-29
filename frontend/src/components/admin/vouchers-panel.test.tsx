@@ -2,19 +2,28 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api";
 import type { Expense } from "@/lib/expenses-api";
-import type { Voucher } from "@/lib/vouchers-api";
+import type { Voucher, VoucherDetail } from "@/lib/vouchers-api";
 import { VouchersPanel } from "./finance";
 
-const { list, create, update, uploadDocument, deleteVoucher, listCategories, listExpenses } =
-  vi.hoisted(() => ({
-    list: vi.fn(),
-    create: vi.fn(),
-    update: vi.fn(),
-    uploadDocument: vi.fn(),
-    deleteVoucher: vi.fn(),
-    listCategories: vi.fn(),
-    listExpenses: vi.fn(),
-  }));
+const {
+  list,
+  create,
+  update,
+  uploadDocument,
+  deleteVoucher,
+  get,
+  listCategories,
+  listExpenses,
+} = vi.hoisted(() => ({
+  list: vi.fn(),
+  create: vi.fn(),
+  update: vi.fn(),
+  uploadDocument: vi.fn(),
+  deleteVoucher: vi.fn(),
+  get: vi.fn(),
+  listCategories: vi.fn(),
+  listExpenses: vi.fn(),
+}));
 
 vi.mock("@/lib/vouchers-api", () => ({
   vouchersApi: {
@@ -23,7 +32,7 @@ vi.mock("@/lib/vouchers-api", () => ({
     update,
     uploadDocument,
     delete: deleteVoucher,
-    get: vi.fn(),
+    get,
     updateStatus: vi.fn(),
     deleteDocument: vi.fn(),
     sendEmail: vi.fn(),
@@ -31,12 +40,16 @@ vi.mock("@/lib/vouchers-api", () => ({
   },
 }));
 
-vi.mock("@/lib/expenses-api", () => ({
-  expensesApi: {
-    list: listExpenses,
-    listCategories,
-  },
-}));
+vi.mock("@/lib/expenses-api", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/expenses-api")>("@/lib/expenses-api");
+  return {
+    ...actual,
+    expensesApi: {
+      list: listExpenses,
+      listCategories,
+    },
+  };
+});
 
 const expense: Expense = {
   id: "exp-1",
@@ -47,8 +60,14 @@ const expense: Expense = {
   amount: 5000,
   currency: "INR",
   date: "2026-10-08",
+  invoiceDate: "2026-10-08",
+  receivedDate: null,
   receipt: null,
   notes: "",
+  voucherStatus: "NOT_VOUCHERED",
+  voucheredAmount: 0,
+  remainingEligibleAmount: 5000,
+  vouchers: [],
   createdAt: "2026-10-08T00:00:00.000Z",
   updatedAt: "2026-10-08T00:00:00.000Z",
 };
@@ -72,7 +91,7 @@ const draftVoucher: Voucher = {
   categoryId: "cat-server",
   category: { id: "cat-server", name: "Server" },
   expenseId: "exp-1",
-  expense: { id: "exp-1", expenseName: "AWS hosting", amount: 5000 },
+  expense: { id: "exp-1", expenseName: "AWS hosting", amount: 5000, invoiceDate: "2026-10-08" },
   referenceNumber: "UTR123",
   notes: "Monthly",
   document: {
@@ -97,6 +116,24 @@ const completedVoucher: Voucher = {
   document: null,
 };
 
+const draftDetail: VoucherDetail = {
+  ...draftVoucher,
+  amountReserved: 0,
+  expense: {
+    id: "exp-1",
+    expenseName: "AWS hosting",
+    amount: 5000,
+    invoiceDate: "2026-10-08",
+    paidBy: "Vishnu KV",
+    category: { id: "cat-server", name: "Server" },
+    notes: "",
+    receivedDate: null,
+    receipt: null,
+  },
+  payments: [],
+  deliveryAttempts: [],
+};
+
 describe("VouchersPanel editing", () => {
   beforeEach(() => {
     list.mockReset();
@@ -104,19 +141,37 @@ describe("VouchersPanel editing", () => {
     update.mockReset();
     uploadDocument.mockReset();
     deleteVoucher.mockReset();
+    get.mockReset();
     listCategories.mockReset();
     listExpenses.mockReset();
     list.mockResolvedValue({
       items: [draftVoucher, completedVoucher],
+      settlementCounts: {
+        unpaid: 2,
+        partiallyPaid: 0,
+        paid: 0,
+        totalOutstandingAmount: 10000,
+      },
       pagination: { page: 1, limit: 100, total: 2, totalPages: 1 },
     });
+    get.mockResolvedValue(draftDetail);
     listCategories.mockResolvedValue([
       { id: "cat-server", name: "Server", order: 1 },
       { id: "cat-domain", name: "Domain", order: 2 },
     ]);
     listExpenses.mockResolvedValue({
-      items: [expense, { ...expense, id: "exp-2", expenseName: "Domain renewal", amount: 1200 }],
+      items: [
+        expense,
+        {
+          ...expense,
+          id: "exp-2",
+          expenseName: "Domain renewal",
+          amount: 1200,
+          remainingEligibleAmount: 1200,
+        },
+      ],
       totalAmount: 6200,
+      voucherCounts: { all: 2, notVouchered: 2, vouchered: 0 },
       pagination: { page: 1, limit: 100, total: 2, totalPages: 1 },
     });
     vi.spyOn(window, "open").mockReturnValue({
@@ -306,18 +361,24 @@ describe("VouchersPanel editing", () => {
   it("applies date, type, method, and search together, keeps them on the next page, then clears them", async () => {
     list.mockResolvedValue({
       items: [draftVoucher],
+      settlementCounts: {
+        unpaid: 1,
+        partiallyPaid: 0,
+        paid: 0,
+        totalOutstandingAmount: 5000,
+      },
       pagination: { page: 1, limit: 20, total: 40, totalPages: 2 },
     });
     render(<VouchersPanel draft={null} />);
     await screen.findByText("VCH-2026-000001");
 
-    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-10-31" } });
-    fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-10-01" } });
+    fireEvent.change(screen.getByLabelText("From voucher date"), { target: { value: "2026-10-31" } });
+    fireEvent.change(screen.getByLabelText("To voucher date"), { target: { value: "2026-10-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
     expect(screen.getByText("From date cannot be later than To date.")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-10-01" } });
-    fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-10-31" } });
+    fireEvent.change(screen.getByLabelText("From voucher date"), { target: { value: "2026-10-01" } });
+    fireEvent.change(screen.getByLabelText("To voucher date"), { target: { value: "2026-10-31" } });
     fireEvent.change(screen.getByLabelText("Voucher type"), { target: { value: "PAYMENT" } });
     fireEvent.change(screen.getByLabelText("Voucher status"), { target: { value: "COMPLETED" } });
     fireEvent.change(screen.getByLabelText("Payment method"), { target: { value: "CHEQUE" } });
@@ -401,14 +462,70 @@ describe("VouchersPanel editing", () => {
         availableToAllocate: 4000,
         settlementStatus: "PARTIALLY_PAID",
       }],
+      settlementCounts: {
+        unpaid: 0,
+        partiallyPaid: 1,
+        paid: 0,
+        totalOutstandingAmount: 4000,
+      },
       pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
     });
     render(<VouchersPanel draft={null} />);
-    expect(await screen.findByText("Partially paid")).toBeInTheDocument();
-    expect(screen.getByText("Expense: AWS hosting")).toBeInTheDocument();
+    expect((await screen.findAllByText("Partially paid")).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Expense: AWS hosting")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete voucher" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Cancel voucher" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Edit voucher" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "View payments" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View details" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "View payments" })).not.toBeInTheDocument();
+  });
+
+  it("opens full-page details when View details or voucher number is clicked", async () => {
+    render(<VouchersPanel draft={null} />);
+    await screen.findByText("VCH-2026-000001");
+
+    fireEvent.click(screen.getAllByRole("button", { name: "View details" })[0]);
+
+    await waitFor(() => expect(get).toHaveBeenCalledWith("v-1"));
+    expect(await screen.findByRole("button", { name: "Back to vouchers" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Voucher summary" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Payment history" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Vouchers" })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to vouchers" }));
+    expect(await screen.findByRole("heading", { name: "Vouchers" })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "VCH-2026-000001" }));
+    await waitFor(() => expect(get).toHaveBeenCalledWith("v-1"));
+    expect(await screen.findByRole("button", { name: "Back to vouchers" })).toBeInTheDocument();
+  });
+
+  it("loads eligible expenses by default and shows settlement summary counts", async () => {
+    render(<VouchersPanel draft={null} />);
+    expect(await screen.findByText("VCH-2026-000001")).toBeInTheDocument();
+    expect(screen.getByText("Unpaid vouchers")).toBeInTheDocument();
+    expect(screen.getByText("Total outstanding")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(listExpenses).toHaveBeenCalledWith(
+        expect.objectContaining({ eligibleForVoucher: true, limit: 100 }),
+      );
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Add Voucher" }));
+    expect(screen.getByLabelText("Find eligible expenses")).toBeInTheDocument();
+    expect(screen.getByLabelText("Expense")).toBeInTheDocument();
+  });
+
+  it("filters vouchers by payment settlement status", async () => {
+    render(<VouchersPanel draft={null} />);
+    await screen.findByText("VCH-2026-000001");
+    fireEvent.change(screen.getByLabelText("Payment status"), {
+      target: { value: "UNPAID" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
+    await waitFor(() => {
+      const latest = list.mock.calls.at(-1)?.[0] as Record<string, unknown>;
+      expect(latest.settlementStatus).toBe("UNPAID");
+    });
   });
 });

@@ -58,6 +58,7 @@ export function parseReceiptExtraction(
     paidBy,
     amount,
     date,
+    invoiceDate: date,
     notes,
     ...(confidence !== undefined ? { confidence } : {}),
   };

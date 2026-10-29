@@ -324,10 +324,28 @@ export function ReportsPanel({
               ))}
             </select>
           </L>
-          <L id="report-from" label="From date">
+          <L
+            id="report-from"
+            label={
+              reportType === "expenses"
+                ? "From invoice date"
+                : reportType === "vouchers"
+                  ? "From voucher date"
+                  : "From payment date"
+            }
+          >
             <input id="report-from" type="date" className="field" value={draft.from} onChange={(event) => updateDraft("from", event.target.value)} />
           </L>
-          <L id="report-to" label="To date">
+          <L
+            id="report-to"
+            label={
+              reportType === "expenses"
+                ? "To invoice date"
+                : reportType === "vouchers"
+                  ? "To voucher date"
+                  : "To payment date"
+            }
+          >
             <input id="report-to" type="date" className="field" value={draft.to} onChange={(event) => updateDraft("to", event.target.value)} />
           </L>
           {reportType === "expenses" && (
@@ -481,7 +499,7 @@ function ExpenseResult({ report }: { report: ExpenseFinancialReport }) {
       <ReportNotes meta={report.meta} />
       <div className="grid gap-4 xl:grid-cols-2">
         <GroupTable title="Category totals" rows={report.summary.byCategory} amountLabel="Expense total" />
-        <GroupTable title="Date totals" rows={report.summary.byDate.map((row) => ({ ...row, label: formatLedgerDate(row.label) }))} amountLabel="Expense total" />
+        <GroupTable title="Invoice date totals" rows={report.summary.byDate.map((row) => ({ ...row, label: formatLedgerDate(row.label) }))} amountLabel="Expense total" />
       </div>
       {report.items.length === 0 ? (
         <div className="card-site p-10 text-center text-muted-foreground">No expenses match the selected filters.</div>
@@ -490,7 +508,8 @@ function ExpenseResult({ report }: { report: ExpenseFinancialReport }) {
           <table className="w-full min-w-[860px] text-sm">
             <thead className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="p-4">Date</th>
+                <th className="p-4">Invoice date</th>
+                <th className="p-4">Received date</th>
                 <th className="p-4">Expense name</th>
                 <th className="p-4">Category</th>
                 <th className="p-4">Paid by</th>
@@ -502,7 +521,8 @@ function ExpenseResult({ report }: { report: ExpenseFinancialReport }) {
             <tbody>
               {report.items.map((item) => (
                 <tr key={item.id} className="border-b border-border last:border-0">
-                  <td className="whitespace-nowrap p-4">{formatLedgerDate(item.date)}</td>
+                  <td className="whitespace-nowrap p-4">{formatLedgerDate(item.invoiceDate || item.date)}</td>
+                  <td className="whitespace-nowrap p-4">{item.receivedDate ? formatLedgerDate(item.receivedDate) : "—"}</td>
                   <td className="p-4 font-medium">{item.expenseName}</td>
                   <td className="p-4">{item.categoryName}</td>
                   <td className="p-4">{item.paidBy}</td>
@@ -543,7 +563,7 @@ function VoucherResult({
       <div className="grid gap-4 xl:grid-cols-2">
         <GroupTable title="Totals by type" rows={report.summary.byType} amountLabel="Voucher total" />
         <GroupTable title="Totals by status" rows={report.summary.byStatus} amountLabel="Voucher total" />
-        <GroupTable title="Date totals" rows={report.summary.byDate.map((row) => ({ ...row, label: formatLedgerDate(row.label) }))} amountLabel="Voucher total" />
+        <GroupTable title="Voucher date totals" rows={report.summary.byDate.map((row) => ({ ...row, label: formatLedgerDate(row.label) }))} amountLabel="Voucher total" />
       </div>
       {report.items.length === 0 ? (
         <div className="card-site p-10 text-center text-muted-foreground">No vouchers match the selected filters.</div>
@@ -553,7 +573,7 @@ function VoucherResult({
             <thead className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="p-4">Voucher number</th>
-                <th className="p-4">Date</th>
+                <th className="p-4">Voucher date</th>
                 <th className="p-4">Type</th>
                 <th className="p-4">Title</th>
                 <th className="p-4">Payee</th>

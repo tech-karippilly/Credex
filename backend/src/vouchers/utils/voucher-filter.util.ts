@@ -3,6 +3,28 @@ import { Types } from 'mongoose';
 import { VoucherQueryDto } from '../dto/voucher-query.dto';
 import { parseExpenseDate } from '../../expenses/utils/expense-date.util';
 
+export function settlementStatusExpression(
+  settlementStatus: string,
+): Record<string, unknown> | null {
+  const settled = { $ifNull: ['$settledPaise', 0] };
+
+  if (settlementStatus === 'UNPAID') {
+    return { $lte: [settled, 0] };
+  }
+
+  if (settlementStatus === 'PARTIALLY_PAID') {
+    return {
+      $and: [{ $gt: [settled, 0] }, { $lt: [settled, '$amountPaise'] }],
+    };
+  }
+
+  if (settlementStatus === 'PAID') {
+    return { $gte: [settled, '$amountPaise'] };
+  }
+
+  return null;
+}
+
 export function buildVoucherFilterFromQuery(
   query: VoucherQueryDto,
 ): Record<string, unknown> {
@@ -60,6 +82,13 @@ export function buildVoucherFilterFromQuery(
       { referenceNumber: regex },
       { notes: regex },
     ];
+  }
+
+  if (query.settlementStatus) {
+    const expression = settlementStatusExpression(query.settlementStatus);
+    if (expression) {
+      filter.$expr = expression;
+    }
   }
 
   return filter;

@@ -16,9 +16,13 @@ vi.mock("@/lib/reports-api", () => ({
   reportsApi: { expenses, vouchers, payments, exportReport },
 }));
 
-vi.mock("@/lib/expenses-api", () => ({
-  expensesApi: { listCategories },
-}));
+vi.mock("@/lib/expenses-api", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/expenses-api")>("@/lib/expenses-api");
+  return {
+    ...actual,
+    expensesApi: { listCategories },
+  };
+});
 
 function expenseReport(overrides: Partial<ExpenseFinancialReport> = {}): ExpenseFinancialReport {
   return {
@@ -40,6 +44,8 @@ function expenseReport(overrides: Partial<ExpenseFinancialReport> = {}): Expense
       {
         id: "exp-1",
         date: "2026-10-01",
+        invoiceDate: "2026-10-01",
+        receivedDate: null,
         expenseName: "AWS",
         categoryId: "cat-1",
         categoryName: "Server",
@@ -133,8 +139,8 @@ describe("ReportsPanel", () => {
 
   it("rejects a from date later than the to date before calling the API", () => {
     render(<ReportsPanel />);
-    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-10-31" } });
-    fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-10-01" } });
+    fireEvent.change(screen.getByLabelText("From invoice date"), { target: { value: "2026-10-31" } });
+    fireEvent.change(screen.getByLabelText("To invoice date"), { target: { value: "2026-10-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate report" }));
     expect(screen.getByRole("alert")).toHaveTextContent("From date cannot be later than To date.");
     expect(expenses).not.toHaveBeenCalled();
@@ -142,8 +148,8 @@ describe("ReportsPanel", () => {
 
   it("generates an expense report and exports the same filters", async () => {
     render(<ReportsPanel />);
-    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-10-01" } });
-    fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-10-31" } });
+    fireEvent.change(screen.getByLabelText("From invoice date"), { target: { value: "2026-10-01" } });
+    fireEvent.change(screen.getByLabelText("To invoice date"), { target: { value: "2026-10-31" } });
     fireEvent.change(screen.getByLabelText("Expense name"), { target: { value: "AWS" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate report" }));
 

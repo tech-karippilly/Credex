@@ -25,4 +25,29 @@ describe('buildVoucherFilterFromQuery', () => {
 
     expect(filter.paymentMode).toBe('CHEQUE');
   });
+
+  it('filters by settlement status using settledPaise', () => {
+    const unpaid = buildVoucherFilterFromQuery({
+      settlementStatus: 'UNPAID',
+    } as VoucherQueryDto);
+    const partial = buildVoucherFilterFromQuery({
+      settlementStatus: 'PARTIALLY_PAID',
+    } as VoucherQueryDto);
+    const paid = buildVoucherFilterFromQuery({
+      settlementStatus: 'PAID',
+    } as VoucherQueryDto);
+
+    expect(unpaid.$expr).toEqual({
+      $lte: [{ $ifNull: ['$settledPaise', 0] }, 0],
+    });
+    expect(partial.$expr).toEqual({
+      $and: [
+        { $gt: [{ $ifNull: ['$settledPaise', 0] }, 0] },
+        { $lt: [{ $ifNull: ['$settledPaise', 0] }, '$amountPaise'] },
+      ],
+    });
+    expect(paid.$expr).toEqual({
+      $gte: [{ $ifNull: ['$settledPaise', 0] }, '$amountPaise'],
+    });
+  });
 });

@@ -30,7 +30,8 @@ export class ExpenseExcelService {
     const workbook = new ExcelJS.Workbook();
     const expensesSheet = workbook.addWorksheet('Expenses');
     expensesSheet.columns = [
-      { header: 'Date', key: 'date', width: 14 },
+      { header: 'Invoice date', key: 'invoiceDate', width: 14 },
+      { header: 'Received date', key: 'receivedDate', width: 14 },
       { header: 'Expense Name', key: 'expenseName', width: 32 },
       { header: 'Category', key: 'category', width: 18 },
       { header: 'Who Paid', key: 'paidBy', width: 22 },
@@ -43,7 +44,10 @@ export class ExpenseExcelService {
     for (const expense of expenses) {
       totalPaise += expense.amountPaise;
       expensesSheet.addRow({
-        date: formatExpenseDate(expense.date),
+        invoiceDate: formatExpenseDate(expense.date),
+        receivedDate: expense.receivedDate
+          ? formatExpenseDate(expense.receivedDate)
+          : '',
         expenseName: expense.expenseName,
         category: this.categoryNameForExport(expense),
         paidBy: expense.paidBy,
@@ -58,7 +62,8 @@ export class ExpenseExcelService {
 
     expensesSheet.addRow({});
     const totalRow = expensesSheet.addRow({
-      date: '',
+      invoiceDate: '',
+      receivedDate: '',
       expenseName: '',
       category: '',
       paidBy: 'Total Amount',

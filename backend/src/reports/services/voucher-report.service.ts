@@ -262,6 +262,7 @@ export class VoucherReportService {
       title: 'Voucher report',
       period: reportPeriod(query.from, query.to),
       filters: describedFilters([
+        { label: 'Date basis', value: 'Voucher date' },
         {
           label: 'Voucher type',
           value: query.voucherType

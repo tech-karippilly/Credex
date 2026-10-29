@@ -40,7 +40,7 @@ export function Footer() {
       </div>
       <div className="border-t border-border">
         <div className="container-site flex flex-col gap-2 py-6 text-xs text-muted-foreground md:flex-row md:justify-between">
-          <p>© {new Date().getFullYear()} {company.brand} All rights reserved.</p>
+          <p>© {new Date().getFullYear()} NEURAFORGE.AI All rights reserved.</p>
           <p>CIN: {company.cin} · {company.website}</p>
         </div>
       </div>

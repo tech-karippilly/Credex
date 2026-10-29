@@ -6,6 +6,7 @@ import { AiModule } from './ai/ai.module';
 import { AuthModule } from './auth/auth.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { DatabaseModule } from './database/database.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { EmailModule } from './email/email.module';
 import { HealthModule } from './health/health.module';
 import { ApplicationsModule } from './applications/applications.module';
@@ -50,6 +51,7 @@ import { UsersModule } from './users/users.module';
     VouchersModule,
     PaymentsModule,
     ReportsModule,
+    DashboardModule,
   ],
 })
 export class AppModule {}

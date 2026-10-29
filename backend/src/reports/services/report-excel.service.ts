@@ -41,7 +41,8 @@ export class ReportExcelService {
       workbook,
       'Expenses',
       [
-        { header: 'Date', key: 'date', width: 14 },
+        { header: 'Invoice date', key: 'invoiceDate', width: 14 },
+        { header: 'Received date', key: 'receivedDate', width: 14 },
         { header: 'Expense name', key: 'expenseName', width: 32 },
         { header: 'Category', key: 'categoryName', width: 20 },
         { header: 'Paid by', key: 'paidBy', width: 22 },
@@ -51,7 +52,8 @@ export class ReportExcelService {
         { header: 'Notes', key: 'notes', width: 36 },
       ],
       report.items.map((item) => ({
-        date: item.date,
+        invoiceDate: item.invoiceDate,
+        receivedDate: item.receivedDate ?? '',
         expenseName: item.expenseName,
         categoryName: item.categoryName,
         paidBy: item.paidBy,
@@ -68,7 +70,7 @@ export class ReportExcelService {
         rows: report.summary.byCategory,
       },
       {
-        title: 'Date totals',
+        title: 'Invoice date totals',
         rows: report.summary.byDate,
       },
     ]);
@@ -89,7 +91,7 @@ export class ReportExcelService {
       'Vouchers',
       [
         { header: 'Voucher number', key: 'voucherNumber', width: 20 },
-        { header: 'Date', key: 'voucherDate', width: 14 },
+        { header: 'Voucher date', key: 'voucherDate', width: 14 },
         { header: 'Type', key: 'voucherTypeLabel', width: 14 },
         { header: 'Title', key: 'title', width: 28 },
         { header: 'Payee', key: 'payee', width: 22 },
@@ -111,7 +113,7 @@ export class ReportExcelService {
     this.addSummarySheet(workbook, [
       { title: 'Totals by type', rows: report.summary.byType },
       { title: 'Totals by status', rows: report.summary.byStatus },
-      { title: 'Date totals', rows: report.summary.byDate },
+      { title: 'Voucher date totals', rows: report.summary.byDate },
     ]);
     return this.finish(workbook, 'voucher', report);
   }

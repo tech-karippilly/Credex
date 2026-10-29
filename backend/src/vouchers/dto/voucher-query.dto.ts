@@ -1,6 +1,7 @@
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsEnum,
+  IsIn,
   IsInt,
   IsMongoId,
   IsOptional,
@@ -9,6 +10,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { SETTLEMENT_STATUSES } from '../../payments/constants/payment.constants';
 import {
   PAYMENT_MODES,
   VOUCHER_STATUSES,
@@ -29,6 +31,11 @@ export class VoucherQueryDto {
   @IsEnum(VOUCHER_STATUSES)
   status?: string;
 
+  /** Payment settlement status derived from settledPaise vs amountPaise. */
+  @IsOptional()
+  @IsIn(SETTLEMENT_STATUSES)
+  settlementStatus?: (typeof SETTLEMENT_STATUSES)[number];
+
   @IsOptional()
   @IsEnum(PAYMENT_MODES)
   paymentMode?: string;
@@ -48,11 +55,13 @@ export class VoucherQueryDto {
   to?: string;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number = 1;
 
   @IsOptional()
+  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)

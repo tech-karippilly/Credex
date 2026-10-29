@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Download, Loader2, Pencil, Plus, Receipt, Trash2, Upload } from "lucide-react";
+import { Eye, Loader2, Pencil, Plus, Receipt, Trash2, Upload } from "lucide-react";
 import { apiErrorMessage } from "@/lib/api";
 import {
   clampPage,
@@ -10,9 +10,18 @@ import {
   parseExpenseAmount,
   receiptFileError,
 } from "@/lib/expense-form";
-import { expensesApi, type Expense, type ExpenseCategory } from "@/lib/expenses-api";
+import {
+  expenseInvoiceDate,
+  expensesApi,
+  type Expense,
+  type ExpenseCategory,
+  type ExpenseReceipt,
+  type ExpenseVoucherCounts,
+  type ExpenseVoucherStatus,
+} from "@/lib/expenses-api";
 import { useCan } from "./admin-access";
 import { LedgerPagination } from "./ledger-pagination";
+import { ReceiptPreviewModal } from "./receipt-preview";
 
 export { VouchersPanel, type VoucherDraft } from "./vouchers-panel";
 
@@ -23,6 +32,11 @@ function L({ id, label, children }: { id: string; label: string; children: React
 function Spin() {
   return <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
 }
+function formatRecordedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" });
+}
 
 /* ---------------- expenses ---------------- */
 
@@ -31,11 +45,19 @@ type ExpenseDraft = {
   categoryId: string;
   paidBy: string;
   amount: string;
-  date: string;
+  invoiceDate: string;
+  receivedDate: string;
   notes: string;
 };
 
-type ExpenseField = "expenseName" | "categoryId" | "paidBy" | "amount" | "date" | "receipt";
+type ExpenseField =
+  | "expenseName"
+  | "categoryId"
+  | "paidBy"
+  | "amount"
+  | "invoiceDate"
+  | "receivedDate"
+  | "receipt";
 
 function emptyExpenseDraft(): ExpenseDraft {
   return {
@@ -43,7 +65,8 @@ function emptyExpenseDraft(): ExpenseDraft {
     categoryId: "",
     paidBy: "",
     amount: "",
-    date: localCalendarDate(),
+    invoiceDate: localCalendarDate(),
+    receivedDate: "",
     notes: "",
   };
 }
@@ -58,7 +81,7 @@ function validateExpenseDraft(
   if (!draft.paidBy.trim()) errors.paidBy = "Paid by is required.";
   const amount = parseExpenseAmount(draft.amount);
   if (!amount.ok) errors.amount = amount.message;
-  if (!draft.date) errors.date = "Date is required.";
+  if (!draft.invoiceDate) errors.invoiceDate = "Invoice date is required.";
   if (file) {
     const receiptError = receiptFileError(file);
     if (receiptError) errors.receipt = receiptError;
@@ -71,7 +94,21 @@ function FieldError({ id, message }: { id: string; message?: string }) {
   return <p id={id} className="mt-1 text-sm text-destructive">{message}</p>;
 }
 
-export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }) {
+function expenseVoucherLabel(status: ExpenseVoucherStatus | undefined): string {
+  return status === "VOUCHERED" ? "Vouchered" : "Not vouchered";
+}
+
+function primaryVoucherNumber(expense: Expense): string | null {
+  return expense.vouchers?.[0]?.voucherNumber ?? null;
+}
+
+export function ExpensesPanel({
+  onVoucher,
+  onOpenVoucher,
+}: {
+  onVoucher: (e: Expense) => void;
+  onOpenVoucher?: (voucherNumber: string) => void;
+}) {
   const can = useCan();
   const [rows, setRows] = useState<Expense[] | null>(null);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
@@ -80,6 +117,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState<number>(20);
   const [categoryId, setCategoryId] = useState("");
+  const [voucherStatus, setVoucherStatus] = useState<ExpenseVoucherStatus | "">("");
   const [dateDraft, setDateDraft] = useState({ from: "", to: "" });
   const [appliedFrom, setAppliedFrom] = useState("");
   const [appliedTo, setAppliedTo] = useState("");
@@ -88,6 +126,11 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
   const [loaded, setLoaded] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [totalAmount, setTotalAmount] = useState(0);
+  const [voucherCounts, setVoucherCounts] = useState<ExpenseVoucherCounts>({
+    all: 0,
+    notVouchered: 0,
+    vouchered: 0,
+  });
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0, totalPages: 0 });
   const [reloadToken, setReloadToken] = useState(0);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
@@ -98,9 +141,11 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
   const [formError, setFormError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingCreatedAt, setEditingCreatedAt] = useState<string | null>(null);
   const [existingReceipt, setExistingReceipt] = useState<Expense["receipt"]>(null);
   const [removeReceipt, setRemoveReceipt] = useState(false);
   const [editingCategory, setEditingCategory] = useState<{ id: string; name: string } | null>(null);
+  const [previewReceipt, setPreviewReceipt] = useState<ExpenseReceipt | null>(null);
   const saveLock = useRef(false);
 
   const refreshList = useCallback(() => setReloadToken((token) => token + 1), []);
@@ -132,6 +177,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
       categoryId: categoryId || undefined,
       from: appliedFrom || undefined,
       to: appliedTo || undefined,
+      voucherStatus: voucherStatus || undefined,
     })
       .then((list) => {
         if (cancelled) return;
@@ -143,6 +189,13 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
         }
         setRows(list.items);
         setTotalAmount(list.totalAmount);
+        setVoucherCounts(
+          list.voucherCounts ?? {
+            all: list.pagination.total,
+            notVouchered: 0,
+            vouchered: 0,
+          },
+        );
         setPagination(list.pagination);
         setLoaded(true);
       })
@@ -157,7 +210,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
     return () => {
       cancelled = true;
     };
-  }, [page, limit, categoryId, appliedFrom, appliedTo, reloadToken]);
+  }, [page, limit, categoryId, voucherStatus, appliedFrom, appliedTo, reloadToken]);
 
   function applyDateFilters() {
     const rangeError = dateRangeError(dateDraft.from, dateDraft.to);
@@ -177,13 +230,22 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
     setAppliedFrom("");
     setAppliedTo("");
     setCategoryId("");
+    setVoucherStatus("");
     setFilterError(null);
     setNotice(null);
     setPage(1);
   }
 
+  function canCreateVoucher(expense: Expense): boolean {
+    if (expense.remainingEligibleAmount != null) {
+      return expense.remainingEligibleAmount > 0;
+    }
+    return expense.voucherStatus !== "VOUCHERED";
+  }
+
   function resetExpenseEditor() {
     setEditingId(null);
+    setEditingCreatedAt(null);
     setExistingReceipt(null);
     setRemoveReceipt(false);
     setEditingCategory(null);
@@ -201,6 +263,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
 
   function openEdit(expense: Expense) {
     setEditingId(expense.id);
+    setEditingCreatedAt(expense.createdAt);
     setExistingReceipt(expense.receipt);
     setRemoveReceipt(false);
     setEditingCategory(expense.category);
@@ -209,7 +272,8 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
       categoryId: expense.categoryId,
       paidBy: expense.paidBy,
       amount: formatAmountInput(expense.amount),
-      date: expense.date.slice(0, 10),
+      invoiceDate: expenseInvoiceDate(expense).slice(0, 10),
+      receivedDate: expense.receivedDate?.slice(0, 10) ?? "",
       notes: expense.notes ?? "",
     });
     setFile(null);
@@ -249,7 +313,9 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
       categoryId: draft.categoryId,
       paidBy: draft.paidBy.trim(),
       amount: amount.amount,
-      date: draft.date,
+      invoiceDate: draft.invoiceDate,
+      date: draft.invoiceDate,
+      receivedDate: draft.receivedDate || null,
       notes: editingId ? draft.notes.trim() : draft.notes.trim() || undefined,
     };
     const receiptFile = file;
@@ -309,8 +375,12 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
     }
   }
 
-  function openReceipt(url: string) {
-    window.open(url, "_blank", "noopener");
+  function openReceipt(receipt: ExpenseReceipt | null | undefined) {
+    if (!receipt?.url) {
+      setNotice({ ok: false, text: "This expense has no receipt file." });
+      return;
+    }
+    setPreviewReceipt(receipt);
   }
 
   async function del(expense: Expense) {
@@ -325,7 +395,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
     }
   }
 
-  const filtersActive = Boolean(categoryId || appliedFrom || appliedTo);
+  const filtersActive = Boolean(categoryId || appliedFrom || appliedTo || voucherStatus);
   const recordLabel = `${pagination.total} expense ${pagination.total === 1 ? "record" : "records"} match the current filters.`;
 
   return (
@@ -354,10 +424,10 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
       )}
 
       <div className="flex flex-wrap items-end gap-3">
-        <L id="x-from" label="From date">
+        <L id="x-from" label="From invoice date">
           <input id="x-from" type="date" className="field h-9" value={dateDraft.from} onChange={(event) => setDateDraft((current) => ({ ...current, from: event.target.value }))} />
         </L>
-        <L id="x-to" label="To date">
+        <L id="x-to" label="To invoice date">
           <input id="x-to" type="date" className="field h-9" value={dateDraft.to} onChange={(event) => setDateDraft((current) => ({ ...current, to: event.target.value }))} />
         </L>
         <L id="x-filter-cat" label="Category">
@@ -377,6 +447,22 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
             ))}
           </select>
         </L>
+        <L id="x-voucher-status" label="Voucher status">
+          <select
+            id="x-voucher-status"
+            className="field h-9"
+            value={voucherStatus}
+            onChange={(event) => {
+              setVoucherStatus(event.target.value as ExpenseVoucherStatus | "");
+              setNotice(null);
+              setPage(1);
+            }}
+          >
+            <option value="">All expenses</option>
+            <option value="NOT_VOUCHERED">Not vouchered</option>
+            <option value="VOUCHERED">Vouchered</option>
+          </select>
+        </L>
         <button type="button" className="btn btn-primary h-9" onClick={applyDateFilters}>Apply filters</button>
         <button type="button" className="btn btn-outline h-9" onClick={clearFilters}>Clear filters</button>
       </div>
@@ -388,7 +474,22 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
         </p>
       )}
 
-      <div className="mt-6 flex flex-wrap items-end justify-between gap-3">
+      <div className="mt-6 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-border px-4 py-3">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">All expenses</p>
+          <p className="mt-1 text-xl font-semibold">{loaded && !listError ? voucherCounts.all : "—"}</p>
+        </div>
+        <div className="rounded-lg border border-border px-4 py-3">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Not vouchered</p>
+          <p className="mt-1 text-xl font-semibold">{loaded && !listError ? voucherCounts.notVouchered : "—"}</p>
+        </div>
+        <div className="rounded-lg border border-border px-4 py-3">
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">Vouchered</p>
+          <p className="mt-1 text-xl font-semibold">{loaded && !listError ? voucherCounts.vouchered : "—"}</p>
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
         <p className="text-sm">
           Filtered total{" "}
           <span className="font-semibold">{loaded && !listError ? inr(totalAmount) : "—"}</span>
@@ -407,31 +508,63 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
         </div>
       ) : (
         <div className="card-site mt-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[960px] text-sm">
             <thead className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="p-4">Date</th>
+                <th className="p-4">Invoice date</th>
                 <th className="p-4">Expense Name</th>
                 <th className="p-4">Category</th>
                 <th className="p-4">Paid By</th>
                 <th className="p-4 text-right">Amount (₹)</th>
+                <th className="p-4">Voucher status</th>
+                <th className="p-4">Voucher</th>
                 <th className="p-4">Receipt</th>
                 <th className="p-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {(rows ?? []).map((expense) => (
+              {(rows ?? []).map((expense) => {
+                const voucherNumber = primaryVoucherNumber(expense);
+                const allowVoucher = canCreateVoucher(expense);
+                return (
                 <tr key={expense.id} className="border-b border-border last:border-0">
-                  <td className="whitespace-nowrap p-4">{formatLedgerDate(expense.date)}</td>
+                  <td className="whitespace-nowrap p-4">{formatLedgerDate(expenseInvoiceDate(expense))}</td>
                   <td className="p-4 font-medium">{expense.expenseName}</td>
                   <td className="p-4">{expense.category.name}</td>
                   <td className="p-4">{expense.paidBy}</td>
                   <td className="whitespace-nowrap p-4 text-right font-semibold">{inr(Number(expense.amount))}</td>
+                  <td className="p-4">{expenseVoucherLabel(expense.voucherStatus)}</td>
+                  <td className="p-4">
+                    {voucherNumber ? (
+                      onOpenVoucher ? (
+                        <button
+                          type="button"
+                          className="font-medium text-primary underline-offset-2 hover:underline"
+                          onClick={() => onOpenVoucher(voucherNumber)}
+                        >
+                          {voucherNumber}
+                        </button>
+                      ) : (
+                        <span className="font-medium">{voucherNumber}</span>
+                      )
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                    {expense.vouchers && expense.vouchers.length > 1 && (
+                      <span className="ml-1 text-xs text-muted-foreground">
+                        +{expense.vouchers.length - 1} more
+                      </span>
+                    )}
+                  </td>
                   <td className="p-4">
                     {expense.receipt?.url ? (
-                      <button type="button" className="btn btn-outline h-8 px-3 text-sm" onClick={() => openReceipt(expense.receipt!.url)}>
-                        <Download className="h-4 w-4" />
-                        View
+                      <button
+                        type="button"
+                        className="btn btn-outline h-8 px-3 text-sm"
+                        onClick={() => openReceipt(expense.receipt)}
+                      >
+                        <Eye className="h-4 w-4" />
+                        View Receipt
                       </button>
                     ) : (
                       <span className="text-muted-foreground">—</span>
@@ -440,12 +573,23 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
                   <td className="p-4">
                     <div className="flex justify-end gap-1">
                       {can("expenses.update") && <button type="button" title="Edit" aria-label="Edit expense" onClick={() => openEdit(expense)} className="btn btn-outline h-8 px-2"><Pencil className="h-4 w-4" /></button>}
-                      {can("vouchers.create") && <button type="button" title="Create voucher" aria-label="Create voucher" onClick={() => onVoucher(expense)} className="btn btn-outline h-8 px-2"><Receipt className="h-4 w-4" /></button>}
+                      {can("vouchers.create") && allowVoucher && (
+                        <button
+                          type="button"
+                          title="Create voucher"
+                          aria-label="Create voucher"
+                          onClick={() => onVoucher(expense)}
+                          className="btn btn-outline h-8 px-2"
+                        >
+                          <Receipt className="h-4 w-4" />
+                        </button>
+                      )}
                       {can("expenses.delete") && <button type="button" title="Delete" aria-label="Delete expense" onClick={() => del(expense)} className="btn btn-outline h-8 px-2 text-destructive"><Trash2 className="h-4 w-4" /></button>}
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -464,6 +608,10 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
             setPage(1);
           }}
         />
+      )}
+
+      {previewReceipt && (
+        <ReceiptPreviewModal receipt={previewReceipt} onClose={() => setPreviewReceipt(null)} />
       )}
 
       {formOpen && (
@@ -548,19 +696,46 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
                 <FieldError id="exp-amt-error" message={fieldErrors.amount} />
               </div>
               <div>
-                <L id="exp-date" label="Date">
+                <L id="exp-invoice-date" label="Invoice date *">
                   <input
-                    id="exp-date"
+                    id="exp-invoice-date"
                     type="date"
                     className="field"
-                    value={draft.date}
-                    aria-invalid={Boolean(fieldErrors.date)}
-                    aria-describedby={fieldErrors.date ? "exp-date-error" : undefined}
-                    onChange={(event) => setDraft({ ...draft, date: event.target.value })}
+                    value={draft.invoiceDate}
+                    aria-invalid={Boolean(fieldErrors.invoiceDate)}
+                    aria-describedby={fieldErrors.invoiceDate ? "exp-invoice-date-error" : "exp-invoice-date-hint"}
+                    onChange={(event) => setDraft({ ...draft, invoiceDate: event.target.value })}
                   />
                 </L>
-                <FieldError id="exp-date-error" message={fieldErrors.date} />
+                <p id="exp-invoice-date-hint" className="mt-1 text-xs text-muted-foreground">
+                  Date printed on the supplier invoice. Independent of when the record is saved.
+                </p>
+                <FieldError id="exp-invoice-date-error" message={fieldErrors.invoiceDate} />
               </div>
+              <div>
+                <L id="exp-received-date" label="Received date">
+                  <input
+                    id="exp-received-date"
+                    type="date"
+                    className="field"
+                    value={draft.receivedDate}
+                    aria-invalid={Boolean(fieldErrors.receivedDate)}
+                    aria-describedby={fieldErrors.receivedDate ? "exp-received-date-error" : "exp-received-date-hint"}
+                    onChange={(event) => setDraft({ ...draft, receivedDate: event.target.value })}
+                  />
+                </L>
+                <p id="exp-received-date-hint" className="mt-1 text-xs text-muted-foreground">
+                  Optional. When the company received the invoice.
+                </p>
+                <FieldError id="exp-received-date-error" message={fieldErrors.receivedDate} />
+              </div>
+              {editingId && editingCreatedAt && (
+                <div>
+                  <p className="mb-2 text-sm font-semibold">Recorded</p>
+                  <p className="text-sm text-muted-foreground">{formatRecordedAt(editingCreatedAt)}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">System entry time. Not editable.</p>
+                </div>
+              )}
               <div>
                 <L id="exp-receipt" label="Receipt">
                   <label htmlFor="exp-receipt" className="field flex cursor-pointer items-center gap-2 text-sm">
@@ -589,7 +764,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
                 {editingId && existingReceipt && !file && !removeReceipt && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                     <span className="text-muted-foreground">Current receipt: {existingReceipt.fileName}</span>
-                    <button type="button" className="btn btn-outline h-8 px-3 text-sm" onClick={() => openReceipt(existingReceipt.url)}>View</button>
+                    <button type="button" className="btn btn-outline h-8 px-3 text-sm" onClick={() => openReceipt(existingReceipt)}>View Receipt</button>
                     <button type="button" className="btn btn-outline h-8 px-3 text-sm" onClick={() => setRemoveReceipt(true)}>Remove receipt</button>
                   </div>
                 )}

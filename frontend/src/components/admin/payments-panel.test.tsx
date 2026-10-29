@@ -219,8 +219,8 @@ describe("PaymentsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Next" }));
     await screen.findByText("PAY-2026-000002");
 
-    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-10-01" } });
-    fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-10-11" } });
+    fireEvent.change(screen.getByLabelText("From payment date"), { target: { value: "2026-10-01" } });
+    fireEvent.change(screen.getByLabelText("To payment date"), { target: { value: "2026-10-11" } });
     fireEvent.change(screen.getByLabelText("Payment method"), { target: { value: "CHEQUE" } });
     fireEvent.change(screen.getByLabelText("Payment status"), { target: { value: "ISSUED" } });
     fireEvent.change(screen.getByLabelText("Payee"), { target: { value: "Vendor" } });
@@ -241,7 +241,7 @@ describe("PaymentsPanel", () => {
       }));
     });
 
-    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-10-12" } });
+    fireEvent.change(screen.getByLabelText("From payment date"), { target: { value: "2026-10-12" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
     expect(screen.getByText("From date cannot be later than To date.")).toBeInTheDocument();
 

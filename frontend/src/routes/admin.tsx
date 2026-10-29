@@ -2,12 +2,13 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
-  LayoutDashboard, Settings, Layers, Briefcase, FileText, Inbox, LogOut, Loader2, Plus, Trash2,
-  Save, ExternalLink, Upload, Eye, EyeOff, Download, Wallet, Receipt, Tags, Banknote, BarChart3,
-  Users, Shield, Contact,
+  Layers, Briefcase, LogOut, Loader2, Plus, Trash2,
+  Save, ExternalLink, Upload, Eye, EyeOff, Download,
 } from "lucide-react";
 import { AdminAccessProvider, useCan } from "@/components/admin/admin-access";
+import { AdminSidebarNav } from "@/components/admin/admin-nav";
 import { ExpenseCategoriesPanel } from "@/components/admin/expense-categories";
+import { OverviewPanel } from "@/components/admin/overview-panel";
 import { RolesPanel } from "@/components/admin/roles-panel";
 import { TeamPanel } from "@/components/admin/team-panel";
 import { LeadsPanel } from "@/components/admin/leads-panel";
@@ -27,7 +28,6 @@ import { siteContactApi } from "@/lib/site-contact-api";
 import { servicesApi } from "@/lib/services-api";
 import { applicationsApi, type JobApplication } from "@/lib/applications-api";
 import { enquiriesApi, type Enquiry } from "@/lib/enquiries-api";
-import { leadsApi } from "@/lib/leads-api";
 import { careersApi } from "@/lib/careers-api";
 import {
   careerToJobRow,
@@ -45,7 +45,6 @@ import {
 } from "@/lib/permissions";
 
 export const Route = createFileRoute("/admin")({
-  ssr: false,
   head: () => ({
     meta: [
       { title: "Admin — CREDEX" },
@@ -206,43 +205,9 @@ function Login({ onSignedIn }: { onSignedIn: () => void }) {
 /* ---------------- dashboard ---------------- */
 
 type Tab = AdminTab;
-const TAB_ICONS: Record<Tab, typeof Settings> = {
-  overview: LayoutDashboard,
-  settings: Settings,
-  services: Layers,
-  team: Users,
-  jobs: Briefcase,
-  applications: FileText,
-  enquiries: Inbox,
-  leads: Contact,
-  expenses: Wallet,
-  "expense-categories": Tags,
-  vouchers: Receipt,
-  payments: Banknote,
-  reports: BarChart3,
-  users: Users,
-  roles: Shield,
-};
 
 function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminAccess; onProfile: (user: AuthUser) => void }) {
   const [tab, setTab] = useState<Tab>("overview");
-  const tabs = [
-    { id: "overview" as const, label: "Overview" },
-    { id: "settings" as const, label: "Site & Contact" },
-    { id: "services" as const, label: "Services" },
-    { id: "team" as const, label: "Team" },
-    { id: "jobs" as const, label: "Careers" },
-    { id: "applications" as const, label: "Applications" },
-    { id: "enquiries" as const, label: "Enquiries" },
-    { id: "leads" as const, label: "Leads" },
-    { id: "expenses" as const, label: "Expenses" },
-    { id: "expense-categories" as const, label: "Expense Categories" },
-    { id: "vouchers" as const, label: "Vouchers" },
-    { id: "payments" as const, label: "Payments" },
-    { id: "reports" as const, label: "Reports" },
-    { id: "users" as const, label: "Users" },
-    { id: "roles" as const, label: "Roles" },
-  ].filter((item) => canSeeAdminTab(access, item.id));
 
   useEffect(() => {
     if (!canSeeAdminTab(access, tab)) setTab("overview");
@@ -264,24 +229,14 @@ function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminA
   }
 
   return (
-    <div className="min-h-screen bg-surface lg:grid lg:grid-cols-[260px_1fr]">
-      <aside className="border-b border-border bg-card lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
-        <div className="flex items-center justify-between p-5 lg:block">
+    <div className="min-h-screen bg-surface lg:grid lg:grid-cols-[320px_1fr]">
+      <aside className="flex max-h-[70vh] flex-col border-b border-border bg-card lg:sticky lg:top-0 lg:h-screen lg:max-h-none lg:border-b-0 lg:border-r">
+        <div className="flex shrink-0 items-center justify-between p-5 lg:block">
           <Link to="/" aria-label="View website"><Logo /></Link>
           <p className="hidden truncate pt-6 text-xs text-muted-foreground lg:block">{user.email}</p>
         </div>
-        <nav aria-label="Admin" className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:pb-0">
-          {tabs.map((t) => {
-            const Icon = TAB_ICONS[t.id];
-            return (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${tab === t.id ? "bg-secondary text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
-              <Icon className="h-4 w-4" />{t.label}
-            </button>
-            );
-          })}
-        </nav>
-        <div className="hidden space-y-1 p-3 lg:absolute lg:bottom-0 lg:block lg:w-full">
+        <AdminSidebarNav access={access} tab={tab} onSelect={setTab} className="min-h-0 flex-1" />
+        <div className="hidden shrink-0 space-y-1 border-t border-border p-3 lg:block">
           <a href="/" target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"><ExternalLink className="h-4 w-4" />View website</a>
           <button onClick={signOut} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"><LogOut className="h-4 w-4" />Sign out</button>
         </div>
@@ -290,7 +245,7 @@ function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminA
         <div className="mb-6 flex justify-end lg:hidden">
           <button onClick={signOut} className="btn btn-outline h-9 px-4 text-sm"><LogOut className="h-4 w-4" />Sign out</button>
         </div>
-        {tab === "overview" && <Overview go={setTab} access={access} />}
+        {tab === "overview" && <OverviewPanel go={setTab} access={access} />}
         {tab === "settings" && <SettingsPanel onSaved={refreshSite} />}
         {tab === "services" && <ServicesPanel onSaved={refreshSite} />}
         {tab === "team" && <TeamPanel onSaved={refreshSite} />}
@@ -298,19 +253,31 @@ function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminA
         {tab === "applications" && <ApplicationsPanel />}
         {tab === "enquiries" && <EnquiriesPanel />}
         {tab === "leads" && <LeadsPanel />}
-        {tab === "expenses" && <ExpensesPanel onVoucher={(x) => {
-          setDraft({
-            expenseId: x.id,
-            categoryId: x.categoryId,
-            paidBy: x.paidBy,
-            payee: "",
-            title: x.expenseName,
-            description: `${x.expenseName} (${x.category.name})${x.notes ? " – " + x.notes : ""}`,
-            amount: String(x.amount),
-            paymentMode: "BANK_TRANSFER",
-          });
-          setTab("vouchers");
-        }} />}
+        {tab === "expenses" && (
+          <ExpensesPanel
+            onVoucher={(x) => {
+              const amount =
+                x.remainingEligibleAmount != null && x.remainingEligibleAmount > 0
+                  ? x.remainingEligibleAmount
+                  : x.amount;
+              setDraft({
+                expenseId: x.id,
+                categoryId: x.categoryId,
+                paidBy: x.paidBy,
+                payee: "",
+                title: x.expenseName,
+                description: `${x.expenseName} (${x.category.name})${x.notes ? " – " + x.notes : ""}`,
+                amount: String(amount),
+                paymentMode: "BANK_TRANSFER",
+              });
+              setTab("vouchers");
+            }}
+            onOpenVoucher={(voucherNumber) => {
+              setVoucherSearch(voucherNumber);
+              setTab("vouchers");
+            }}
+          />
+        )}
         {tab === "expense-categories" && <ExpenseCategoriesPanel />}
         {tab === "vouchers" && (
           <VouchersPanel
@@ -423,70 +390,6 @@ function ImageField({
 }
 
 const lines = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
-
-/* ---------------- overview ---------------- */
-
-function Overview({ go, access }: { go: (t: Tab) => void; access: AdminAccess }) {
-  const [c, setC] = useState<{ services: number | null; jobs: number | null; applications: number | null; enquiries: number | null; leads: number | null }>({ services: null, jobs: null, applications: null, enquiries: null, leads: null });
-  const [notice, setNotice] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const problems: string[] = [];
-      async function count(label: string, allowed: boolean, load: () => Promise<{ length: number }>) {
-        if (!allowed) return 0;
-        try {
-          return (await load()).length;
-        } catch (error) {
-          problems.push(`${label}: ${apiErrorMessage(error, "Could not load")}`);
-          return null;
-        }
-      }
-      const services = await count("Services", canSeeAdminTab(access, "services"), () => servicesApi.listAdmin());
-      const jobs = await count("Careers", canSeeAdminTab(access, "jobs"), () => careersApi.listAdmin());
-      const applications = await count("Applications", canSeeAdminTab(access, "applications"), () => applicationsApi.list());
-      const enquiries = await count("Enquiries", canSeeAdminTab(access, "enquiries"), () => enquiriesApi.list());
-      let leads: number | null = 0;
-      if (canSeeAdminTab(access, "leads")) {
-        try {
-          leads = (await leadsApi.summary()).total;
-        } catch (error) {
-          problems.push(`Leads: ${apiErrorMessage(error, "Could not load")}`);
-          leads = null;
-        }
-      }
-      if (!cancelled) {
-        setC({ services, jobs, applications, enquiries, leads });
-        setNotice(problems.length > 0 ? problems.join(" ") : null);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [access]);
-  const cards = (
-    [
-      { label: "Services", value: c.services, tab: "services" as const, icon: Layers },
-      { label: "Job openings", value: c.jobs, tab: "jobs" as const, icon: Briefcase },
-      { label: "Applications", value: c.applications, tab: "applications" as const, icon: FileText },
-      { label: "Enquiries", value: c.enquiries, tab: "enquiries" as const, icon: Inbox },
-      { label: "Leads", value: c.leads, tab: "leads" as const, icon: Contact },
-    ] as const
-  ).filter((card) => canSeeAdminTab(access, card.tab));
-  return (
-    <>
-      <PanelHead title="Dashboard" text="Manage your website content, careers and incoming enquiries." />
-      {notice && <p role="alert" className="mb-4 text-sm text-destructive">{notice}</p>}
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        {cards.map((k) => (
-          <button key={k.label} onClick={() => go(k.tab)} className="card-site card-hover p-6 text-left">
-            <k.icon className="h-5 w-5 text-primary" />
-            <p className="mt-5 font-display text-4xl font-semibold">{k.value === null ? "—" : k.value}</p>
-            <p className="mt-1 text-sm text-muted-foreground">{k.label}</p>
-          </button>
-        ))}
-      </div>
-    </>
-  );
-}
 
 /* ---------------- settings ---------------- */
 

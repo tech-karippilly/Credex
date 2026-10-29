@@ -112,4 +112,15 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = [
 
   permission('reports', 'read', 'View financial reports'),
   permission('reports', 'export', 'Export financial reports'),
+
+  permission(
+    'dashboard',
+    'expenses_summary.read',
+    'View the Expenses Summary card on the admin dashboard',
+  ),
+  permission(
+    'dashboard',
+    'expenses_by_category.read',
+    'View the Expenses by Category card on the admin dashboard',
+  ),
 ];

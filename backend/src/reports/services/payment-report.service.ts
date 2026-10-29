@@ -350,6 +350,7 @@ export class PaymentReportService {
       title: 'Payment report',
       period: reportPeriod(query.from, query.to),
       filters: describedFilters([
+        { label: 'Date basis', value: 'Payment date' },
         {
           label: 'Payment method',
           value: query.paymentMethod

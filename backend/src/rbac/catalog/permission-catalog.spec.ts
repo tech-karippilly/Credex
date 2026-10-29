@@ -21,6 +21,7 @@ describe('permission catalogue', () => {
       [
         'applications',
         'careers',
+        'dashboard',
         'enquiries',
         'expense_categories',
         'expenses',

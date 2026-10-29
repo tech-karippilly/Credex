@@ -4,12 +4,12 @@ import type { ReactNode } from "react";
 import { useReveal } from "@/lib/use-reveal";
 
 export function Reveal({ children, delay = 0, className = "" }: { children: ReactNode; delay?: number; className?: string }) {
-  const { ref, inView } = useReveal<HTMLDivElement>();
+  const { ref, playEntrance } = useReveal<HTMLDivElement>();
   return (
     <div
       ref={ref}
-      className={`${inView ? "animate-rise" : "opacity-0"} ${className}`}
-      style={inView && delay ? { animationDelay: `${delay}ms` } : undefined}
+      className={[playEntrance ? "animate-rise" : "", className].filter(Boolean).join(" ")}
+      style={playEntrance && delay ? { animationDelay: `${delay}ms` } : undefined}
     >
       {children}
     </div>

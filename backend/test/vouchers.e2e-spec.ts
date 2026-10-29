@@ -213,6 +213,7 @@ describe('Vouchers (e2e)', () => {
           voucherPayload({
             categoryId,
             expenseId: expense.id,
+            voucherDate: '2026-10-20',
           }),
         )
         .expect(201);
@@ -221,6 +222,10 @@ describe('Vouchers (e2e)', () => {
       expect(created.body.data.amount).toBe(5000);
       expect(created.body.data.category.name).toBe('Server');
       expect(created.body.data.expense.expenseName).toBe('AWS Hosting');
+      // Voucher date stays independent of the linked expense invoice date.
+      expect(created.body.data.voucherDate).toBe('2026-10-20');
+      expect(created.body.data.expense.invoiceDate).toBe('2026-10-08');
+      expect(expense.invoiceDate).toBe('2026-10-08');
 
       const second = await request(app.getHttpServer())
         .post('/api/v1/vouchers')
@@ -344,7 +349,7 @@ describe('Vouchers (e2e)', () => {
           voucherDate: '2026-10-09',
           title: 'Updated hosting',
           payee: 'Amazon',
-          amount: 5200,
+          amount: 5100,
           paymentMode: 'UPI',
           referenceNumber: 'UTR999',
           notes: 'Edited note',
@@ -358,7 +363,11 @@ describe('Vouchers (e2e)', () => {
       );
       expect(updated.body.data.status).toBe('DRAFT');
       expect(updated.body.data.expenseId).toBe(expense.id);
-      expect(updated.body.data.amount).toBe(5200);
+      expect(updated.body.data.amount).toBe(5100);
+      expect(updated.body.data.voucherDate).toBe('2026-10-09');
+      expect(updated.body.data.expense.invoiceDate).toBe(
+        updatedExpense.body.data.invoiceDate,
+      );
       expect(updated.body.data.paymentMode).toBe('UPI');
       expect(updated.body.data.payee).toBe('Amazon');
       expect(updated.body.data.referenceNumber).toBe('UTR999');

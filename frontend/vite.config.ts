@@ -1,25 +1,41 @@
-// @lovable.dev/vite-tanstack-config already includes the following — do NOT add them manually
-// or the app will break with duplicate plugins:
-//   - TanStack devtools (dev-only, first), tanstackStart, viteReact, tailwindcss, tsConfigPaths,
-//     nitro (build-only using cloudflare as a default target), VITE_* env injection, @ path alias,
-//     React/TanStack dedupe, error logger plugins, and sandbox detection (port/host/strictPort).
-// You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
-import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import fs from "node:fs";
+import path from "node:path";
+import tailwindcss from "@tailwindcss/vite";
+import { tanstackRouter } from "@tanstack/router-plugin/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig, type Plugin } from "vite";
+import tsconfigPaths from "vite-tsconfig-paths";
+
+/** Static hosts have no server rewrite. GitHub Pages serves 404.html for unknown paths. */
+function spaFallback(): Plugin {
+  return {
+    name: "spa-fallback",
+    apply: "build",
+    closeBundle() {
+      const dist = path.resolve("dist");
+      const indexPath = path.join(dist, "index.html");
+      if (!fs.existsSync(indexPath)) return;
+      fs.copyFileSync(indexPath, path.join(dist, "404.html"));
+      fs.writeFileSync(path.join(dist, ".nojekyll"), "");
+    },
+  };
+}
 
 export default defineConfig({
-  tanstackStart: {
-    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
-    server: { entry: "server" },
-  },
-  vite: {
-    // Pre-bundle these up front so the preview never re-optimizes mid-session
-    // (which can load two React copies and crash hooks).
-    optimizeDeps: { include: ["lucide-react", "zod"] },
-    server: {
-      // Cloudflare quick tunnels (cloudflared) get a new *.trycloudflare.com host each run.
-      // A leading dot also allows the apex host and any subdomain (www.credexfin.com).
-      allowedHosts: [".trycloudflare.com", ".credexfin.com"],
-    },
+  plugins: [
+    tanstackRouter({
+      target: "react",
+      autoCodeSplitting: true,
+      quoteStyle: "single",
+      semicolons: false,
+    }),
+    react(),
+    tailwindcss(),
+    tsconfigPaths(),
+    spaFallback(),
+  ],
+  optimizeDeps: { include: ["lucide-react", "zod"] },
+  server: {
+    allowedHosts: [".trycloudflare.com", ".credexfin.com"],
   },
 });

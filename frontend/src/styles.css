@@ -96,6 +96,8 @@
   :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 4px; }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+    /* `animation: none` does not clear a leftover opacity gate. */
+    .animate-rise { opacity: 1 !important; transform: none !important; }
   }
 }
 
@@ -227,7 +229,8 @@
   background-size: 20px 20px;
 }
 
-@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+/* Transform only. Opacity stays 1 so fill-mode and animation-delay cannot hide text. */
+@keyframes rise { from { opacity: 1; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 @utility animate-rise { animation: rise .7s cubic-bezier(.2,.7,.2,1) both; }
 
 /* Gradient heading text — luminous off-white fading into molten copper */
@@ -273,3 +276,27 @@
   to { stroke-dashoffset: -240; }
 }
 @utility animate-dash-flow { animation: dash-flow 14s linear infinite; }
+
+@keyframes admin-nav-down {
+  from { height: 0; }
+  to { height: var(--radix-collapsible-content-height); }
+}
+@keyframes admin-nav-up {
+  from { height: var(--radix-collapsible-content-height); }
+  to { height: 0; }
+}
+.admin-nav-submenu {
+  overflow: hidden;
+}
+.admin-nav-submenu[data-state="open"] {
+  animation: admin-nav-down 180ms ease-out;
+}
+.admin-nav-submenu[data-state="closed"] {
+  animation: admin-nav-up 180ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-nav-submenu[data-state="open"],
+  .admin-nav-submenu[data-state="closed"] {
+    animation: none;
+  }
+}

@@ -194,9 +194,14 @@ export class ExpenseLedgerReportService {
 
   private toItem(expense: ExpenseDocument): ExpenseReportItem {
     const category = this.categoryOf(expense);
+    const invoiceDate = formatExpenseDate(expense.date);
     return {
       id: expense._id.toString(),
-      date: formatExpenseDate(expense.date),
+      date: invoiceDate,
+      invoiceDate,
+      receivedDate: expense.receivedDate
+        ? formatExpenseDate(expense.receivedDate)
+        : null,
       expenseName: expense.expenseName,
       categoryId: category.id,
       categoryName: category.name,
@@ -248,6 +253,7 @@ export class ExpenseLedgerReportService {
       title: 'Expense report',
       period: reportPeriod(query.from, query.to),
       filters: describedFilters([
+        { label: 'Date basis', value: 'Invoice date' },
         { label: 'Category', value: categoryName },
         { label: 'Paid by', value: query.paidBy },
         { label: 'Expense name', value: query.search },

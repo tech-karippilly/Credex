@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Search } from "lucide-react";
 import { useCan } from "@/components/admin/admin-access";
 import { apiErrorMessage } from "@/lib/api";
 import { permissionActionLabel, permissionModuleLabel } from "@/lib/permissions";
@@ -10,6 +10,7 @@ export function RolesPanel() {
   const [roles, setRoles] = useState<ManagedRoleDetail[] | null>(null);
   const [catalogue, setCatalogue] = useState<PermissionRecord[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
@@ -33,6 +34,18 @@ export function RolesPanel() {
   useEffect(load, [load]);
 
   const selected = roles?.find((role) => role.id === selectedId) ?? null;
+  const filteredRoles = useMemo(() => {
+    if (!roles) return [];
+    const q = search.trim().toLowerCase();
+    if (!q) return roles;
+    return roles.filter((role) => {
+      return (
+        role.name.toLowerCase().includes(q) ||
+        role.key.toLowerCase().includes(q) ||
+        role.description.toLowerCase().includes(q)
+      );
+    });
+  }, [roles, search]);
   const groups = useMemo(() => {
     const grouped = new Map<string, PermissionRecord[]>();
     for (const permission of catalogue) {
@@ -155,8 +168,26 @@ export function RolesPanel() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
           <div className="space-y-3">
-            {roles.length === 0 && <div className="card-site p-6 text-sm text-muted-foreground">No roles yet.</div>}
-            {roles.map((role) => (
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input
+                type="search"
+                className="field pl-10"
+                placeholder="Search roles..."
+                aria-label="Search roles"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+            {roles.length === 0 && (
+              <div className="card-site p-6 text-sm text-muted-foreground">No roles yet.</div>
+            )}
+            {roles.length > 0 && filteredRoles.length === 0 && (
+              <div className="card-site p-6 text-sm text-muted-foreground">
+                No roles found matching your search.
+              </div>
+            )}
+            {filteredRoles.map((role) => (
               <button
                 key={role.id}
                 type="button"

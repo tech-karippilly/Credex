@@ -1,4 +1,3 @@
-import { createServerFn } from "@tanstack/react-start";
 import { careerToJobRow, serviceToRow, siteContactToSettings, teamMemberToRow } from "./cms-mappers";
 import { getApiBaseUrl } from "./api";
 import type { ApiSuccessResponse } from "./api-types";
@@ -56,7 +55,7 @@ export type TeamMemberRow = {
 };
 
 export const DEFAULT_SETTINGS: SiteSettings = {
-  email: "hr@credexfin.com",
+  email: "support@neuraforgeai.org",
   phone: "+91 80785 99537",
   location: "Irinjalakuda, Thrissur, Kerala, India",
   linkedin: "",
@@ -215,13 +214,8 @@ async function loadSiteContent() {
       );
     }
 
-    if (!import.meta.env.DEV) {
-      throw new Error(
-        `Backend API unreachable (${failures.map((failure) => failure.path).join(", ")}).`,
-      );
-    }
     console.warn(
-      `[getSiteContent] Backend API unreachable (${failures.map((failure) => failure.path).join(", ")}). Using defaults. Start the backend (npm run start:dev in /backend).`,
+      `[getSiteContent] Backend API unreachable (${failures.map((failure) => failure.path).join(", ")}). Using built-in site content.`,
     );
     return EMPTY_SITE_CONTENT;
   }
@@ -266,11 +260,11 @@ async function loadSiteContent() {
 
 let siteContentInflight: Promise<Awaited<ReturnType<typeof loadSiteContent>>> | null = null;
 
-export const getSiteContent = createServerFn({ method: "GET" }).handler(() => {
+export function getSiteContent() {
   if (!siteContentInflight) {
     siteContentInflight = loadSiteContent().finally(() => {
       siteContentInflight = null;
     });
   }
   return siteContentInflight;
-});
+}

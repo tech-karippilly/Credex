@@ -6,12 +6,10 @@ import {
   useRouter,
   useRouterState,
   HeadContent,
-  Scripts,
   type ErrorComponentProps,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect } from "react";
 
-import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Header } from "@/components/site/Header";
 import { Footer } from "@/components/site/Footer";
@@ -91,7 +89,7 @@ const orgSchema = {
   name: company.legalName,
   alternateName: company.brand,
   url: SITE_URL,
-  email: "hr@credexfin.com",
+  email: "support@neuraforgeai.org",
   telephone: "+91 80785 99537",
   slogan: company.tagline,
   logo: LOGO_URL,
@@ -110,7 +108,6 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:site_name", content: company.brand },
     ],
     links: [
-      { rel: "stylesheet", href: appCss },
       ...siteIconLinks,
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
@@ -119,25 +116,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     scripts: [{ type: "application/ld+json", children: JSON.stringify(orgSchema) }],
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(contentQuery),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
 });
-
-function RootShell({ children }: { children: ReactNode }) {
-  return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  );
-}
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
@@ -145,6 +127,7 @@ function RootComponent() {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <HeadContent />
       {isAdmin ? (
         <Outlet />
       ) : (

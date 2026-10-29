@@ -24,6 +24,8 @@ export type PaymentMethodGroup = ReportGroup & { clearedAmount: number };
 export type ExpenseReportItem = {
   id: string;
   date: string;
+  invoiceDate: string;
+  receivedDate: string | null;
   expenseName: string;
   categoryId: string;
   categoryName: string;

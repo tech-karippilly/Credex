@@ -12,7 +12,7 @@ export const Route = createFileRoute("/about")({
   head: () =>
     seo({
       title: "About CREDEX | The Lending OS Team in Kerala",
-      description: "CREDEX is a next-generation lending operating system built in Irinjalakuda, Thrissur, Kerala, for India's NBFCs and MFIs.",
+      description: "CREDEX is a product of neuraforge.ai — a next-generation lending operating system built in Irinjalakuda, Thrissur, Kerala, for India's NBFCs and MFIs.",
       path: "/about",
     }),
   component: About,
@@ -56,7 +56,7 @@ function About() {
       <PageHero
         eyebrow="About CREDEX"
         title="The team building India's next-generation lending OS."
-        text="CREDEX is a modern loan management operating system for India's NBFCs and MFIs — unifying origination, collections and the general ledger on one real-time core."
+        text="CREDEX is a product of neuraforge.ai — a modern loan management operating system for India's NBFCs and MFIs, unifying origination, collections and the general ledger on one real-time core."
       />
 
       {/* Who We Are — text + facts panel (no image) */}
@@ -65,7 +65,11 @@ function About() {
           <Reveal>
             <SectionHeading eyebrow="Who We Are" title="A product team for India's lenders" />
             <p className="mt-6 text-lg leading-relaxed text-muted-foreground">
-              {company.brand} is a lending-technology company based in Irinjalakuda, Thrissur, Kerala, building the operating system for India&apos;s NBFCs and MFIs — origination, collections and the ledger on one real-time platform.
+              {company.brand} is a product of{" "}
+              <a href="https://neuraforge.ai" target="_blank" rel="noopener noreferrer" className="font-semibold text-foreground hover:text-primary">
+                neuraforge.ai
+              </a>
+              . It is built in Irinjalakuda, Thrissur, Kerala, as the operating system for India&apos;s NBFCs and MFIs — origination, collections and the ledger on one real-time platform.
             </p>
             <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
               We work closely with lenders to understand how their branches and field teams actually operate, then shape CREDEX to remove friction, enforce controls, and create measurable value.

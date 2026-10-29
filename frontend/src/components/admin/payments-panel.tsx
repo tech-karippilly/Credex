@@ -622,10 +622,10 @@ export function PaymentsPanel({
       )}
 
       <div className="flex flex-wrap items-end gap-3">
-        <L id="p-from" label="From date">
+        <L id="p-from" label="From payment date">
           <input id="p-from" type="date" className="field h-9" value={draftFilters.from} onChange={(event) => setDraftFilters((current) => ({ ...current, from: event.target.value }))} />
         </L>
-        <L id="p-to" label="To date">
+        <L id="p-to" label="To payment date">
           <input id="p-to" type="date" className="field h-9" value={draftFilters.to} onChange={(event) => setDraftFilters((current) => ({ ...current, to: event.target.value }))} />
         </L>
         <L id="p-fmethod" label="Payment method">
@@ -830,10 +830,13 @@ export function PaymentsPanel({
                     disabled={locked}
                     value={form.paymentDate}
                     aria-invalid={Boolean(fieldErrors.paymentDate)}
-                    aria-describedby={fieldErrors.paymentDate ? "p-date-error" : undefined}
+                    aria-describedby={fieldErrors.paymentDate ? "p-date-error" : "p-date-hint"}
                     onChange={(event) => setForm({ ...form, paymentDate: event.target.value })}
                   />
                 </L>
+                <p id="p-date-hint" className="mt-1 text-xs text-muted-foreground">
+                  Actual payment transaction date. Each instalment keeps its own date.
+                </p>
                 <FieldError id="p-date-error" message={fieldErrors.paymentDate} />
               </div>
               <div>
@@ -999,28 +1002,34 @@ export function PaymentsPanel({
                     <input id="p-vsearch" className="field" value={voucherSearch} placeholder="Voucher number, title, or payee" onChange={(event) => setVoucherSearch(event.target.value)} />
                   </L>
                   <div className="overflow-x-auto rounded-lg border border-border">
-                    <table className="w-full min-w-[720px] text-sm">
+                    <table className="w-full min-w-[900px] text-sm">
                       <thead className="text-left text-xs uppercase text-muted-foreground">
                         <tr>
                           <th className="p-3">Voucher</th>
-                          <th className="p-3">Date</th>
+                          <th className="p-3">Voucher date</th>
                           <th className="p-3">Title</th>
                           <th className="p-3">Payee</th>
+                          <th className="p-3 text-right">Total</th>
+                          <th className="p-3 text-right">Paid</th>
                           <th className="p-3 text-right">Outstanding</th>
+                          <th className="p-3">Payment status</th>
                           <th className="p-3 text-right">Available</th>
                           <th className="p-3" />
                         </tr>
                       </thead>
                       <tbody>
                         {eligible.length === 0 ? (
-                          <tr><td className="p-3 text-muted-foreground" colSpan={7}>No eligible vouchers with a balance available to allocate.</td></tr>
+                          <tr><td className="p-3 text-muted-foreground" colSpan={10}>No unpaid or partially paid vouchers with a balance available to allocate.</td></tr>
                         ) : eligible.map((voucher) => (
                           <tr key={voucher.id} className="border-t border-border">
                             <td className="p-3 font-semibold">{voucher.voucherNumber}</td>
                             <td className="p-3">{formatLedgerDate(voucher.voucherDate)}</td>
                             <td className="p-3">{voucher.title}</td>
                             <td className="p-3">{voucher.payee}</td>
+                            <td className="p-3 text-right">{inr(voucher.amount)}</td>
+                            <td className="p-3 text-right">{inr(voucher.amountPaid ?? 0)}</td>
                             <td className="p-3 text-right">{inr(voucher.outstandingAmount)}</td>
+                            <td className="p-3">{settlementText(voucher.settlementStatus)}</td>
                             <td className="p-3 text-right">{inr(voucher.availableToAllocate)}</td>
                             <td className="p-3 text-right">
                               <button type="button" className="btn btn-outline h-8 px-3 text-sm" onClick={() => addVoucher(voucher)} disabled={allocations.some((row) => row.voucherId === voucher.id)}>
@@ -1039,7 +1048,7 @@ export function PaymentsPanel({
                   <thead className="text-left text-xs uppercase text-muted-foreground">
                     <tr>
                       <th className="p-3">Voucher</th>
-                      <th className="p-3">Date</th>
+                      <th className="p-3">Voucher date</th>
                       <th className="p-3">Title</th>
                       <th className="p-3">Payee</th>
                       <th className="p-3 text-right">Original</th>
@@ -1180,7 +1189,7 @@ export function PaymentsPanel({
                   <thead className="text-left text-xs uppercase text-muted-foreground">
                     <tr>
                       <th className="p-2">Voucher</th>
-                      <th className="p-2">Date</th>
+                      <th className="p-2">Voucher date</th>
                       <th className="p-2">Title</th>
                       <th className="p-2 text-right">Allocation</th>
                       <th className="p-2 text-right">Outstanding</th>

@@ -25,6 +25,7 @@ describe('parseReceiptExtraction', () => {
       paidBy: null,
       amount: 5000,
       date: '2026-10-08',
+      invoiceDate: '2026-10-08',
       notes: 'October hosting',
       confidence: 0.94,
     });

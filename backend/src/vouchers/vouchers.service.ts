@@ -15,9 +15,15 @@ import { Expense, ExpenseDocument } from '../expenses/schemas/expense.schema';
 import { formatExpenseDate, parseExpenseDate } from '../expenses/utils/expense-date.util';
 import { inrToPaise, paiseToInr } from '../expenses/utils/money.util';
 import {
+  ACTIVE_VOUCHER_STATUSES,
+  computeExpenseVoucherLinkage,
+  isFullyVouchered,
+} from '../expenses/utils/expense-voucher.util';
+import {
   PaymentAllocation,
   PaymentAllocationDocument,
 } from '../payments/schemas/payment-allocation.schema';
+import { Payment, PaymentDocument } from '../payments/schemas/payment.schema';
 import { settlementStatus } from '../payments/utils/payment-rules';
 import {
   DEFAULT_VOUCHER_STATUS,
@@ -28,12 +34,19 @@ import { CreateVoucherDto } from './dto/create-voucher.dto';
 import { UpdateVoucherDto } from './dto/update-voucher.dto';
 import { VoucherQueryDto } from './dto/voucher-query.dto';
 import {
+  VoucherDetailResponse,
+  VoucherExpenseDetail,
   VoucherListResponse,
+  VoucherPaymentHistoryItem,
   VoucherResponse,
+  VoucherSettlementCounts,
 } from './interfaces/voucher-response.interface';
 import { Voucher, VoucherDocument } from './schemas/voucher.schema';
 import { VoucherNumberService } from './services/voucher-number.service';
-import { buildVoucherFilterFromQuery } from './utils/voucher-filter.util';
+import {
+  buildVoucherFilterFromQuery,
+  settlementStatusExpression,
+} from './utils/voucher-filter.util';
 
 const POPULATE_PATHS: string[] = ['categoryId', 'expenseId'];
 
@@ -48,6 +61,8 @@ export class VouchersService {
     private readonly expenseModel: Model<ExpenseDocument>,
     @InjectModel(PaymentAllocation.name)
     private readonly paymentAllocationModel: Model<PaymentAllocationDocument>,
+    @InjectModel(Payment.name)
+    private readonly paymentModel: Model<PaymentDocument>,
     private readonly cloudinaryService: CloudinaryService,
     private readonly expenseCategoriesService: ExpenseCategoriesService,
     private readonly voucherNumberService: VoucherNumberService,
@@ -56,6 +71,7 @@ export class VouchersService {
   toResponse(voucher: VoucherDocument | Voucher): VoucherResponse {
     const document = voucher as VoucherDocument;
     const id = document._id ? document._id.toString() : '';
+    const reservedPaise = document.reservedPaise ?? 0;
 
     return {
       id,
@@ -72,8 +88,9 @@ export class VouchersService {
         Math.max(0, document.amountPaise - (document.settledPaise ?? 0)),
       ),
       availableToAllocate: paiseToInr(
-        Math.max(0, document.amountPaise - (document.reservedPaise ?? 0)),
+        Math.max(0, document.amountPaise - reservedPaise),
       ),
+      amountReserved: paiseToInr(reservedPaise),
       settlementStatus: settlementStatus(
         document.amountPaise,
         document.settledPaise ?? 0,
@@ -107,8 +124,14 @@ export class VouchersService {
       );
     }
 
-    if (createDto.expenseId) {
-      await this.assertExpenseExists(createDto.expenseId);
+    const amountPaise = inrToPaise(createDto.amount);
+    const status = createDto.status ?? DEFAULT_VOUCHER_STATUS;
+
+    if (createDto.expenseId && status !== 'CANCELLED') {
+      await this.assertExpenseAcceptsVoucherAmount(
+        createDto.expenseId,
+        amountPaise,
+      );
     }
 
     const voucherDate = parseExpenseDate(createDto.voucherDate);
@@ -123,7 +146,7 @@ export class VouchersService {
       description: createDto.description?.trim() ?? '',
       paidBy: createDto.paidBy,
       payee: createDto.payee,
-      amountPaise: inrToPaise(createDto.amount),
+      amountPaise,
       currency: VOUCHER_CURRENCY,
       paymentMode: createDto.paymentMode,
       categoryId: createDto.categoryId
@@ -135,11 +158,17 @@ export class VouchersService {
       referenceNumber: createDto.referenceNumber?.trim() ?? '',
       notes: createDto.notes?.trim() ?? '',
       document: null,
-      status: createDto.status ?? DEFAULT_VOUCHER_STATUS,
+      status,
     };
 
     try {
       const created = await this.voucherModel.create(payload);
+      if (createDto.expenseId && status !== 'CANCELLED') {
+        await this.assertExpenseLinkageStillValid(
+          createDto.expenseId,
+          created._id.toString(),
+        );
+      }
       const populated = await this.populateRelations(created);
       return this.toResponse(populated);
     } catch (error) {
@@ -155,8 +184,12 @@ export class VouchersService {
     const limit = query.limit ?? 20;
     const filter = buildVoucherFilterFromQuery(query);
     const skip = (page - 1) * limit;
+    const baseFilterForCounts = buildVoucherFilterFromQuery({
+      ...query,
+      settlementStatus: undefined,
+    });
 
-    const [items, total] = await Promise.all([
+    const [items, total, settlementCounts] = await Promise.all([
       this.voucherModel
         .find(filter)
         .populate(POPULATE_PATHS)
@@ -165,10 +198,12 @@ export class VouchersService {
         .limit(limit)
         .exec(),
       this.voucherModel.countDocuments(filter).exec(),
+      this.computeSettlementCounts(baseFilterForCounts),
     ]);
 
     return {
       items: items.map((item) => this.toResponse(item)),
+      settlementCounts,
       pagination: {
         page,
         limit,
@@ -178,9 +213,29 @@ export class VouchersService {
     };
   }
 
-  async findOne(id: string): Promise<VoucherResponse> {
+  async findOne(id: string): Promise<VoucherDetailResponse> {
     const voucher = await this.findDocumentById(id, true);
-    return this.toResponse(voucher);
+    const base = this.toResponse(voucher);
+    const [expense, payments] = await Promise.all([
+      this.resolveExpenseDetail(voucher),
+      this.loadPaymentHistory(voucher._id),
+    ]);
+
+    return {
+      ...base,
+      expense,
+      payments,
+      deliveryAttempts: (voucher.deliveryAttempts ?? []).map((attempt) => ({
+        channel: attempt.channel,
+        recipient: attempt.recipient,
+        status: attempt.status,
+        providerMessageId: attempt.providerMessageId,
+        errorSummary: attempt.errorSummary,
+        attemptedAt:
+          attempt.attemptedAt?.toISOString?.() ??
+          new Date(attempt.attemptedAt).toISOString(),
+      })),
+    };
   }
 
   async update(id: string, updateDto: UpdateVoucherDto): Promise<VoucherResponse> {
@@ -226,8 +281,36 @@ export class VouchersService {
       if (updateDto.expenseId === null) {
         update.expenseId = null;
       } else {
-        await this.assertExpenseExists(updateDto.expenseId);
+        const nextAmountPaise =
+          updateDto.amount !== undefined
+            ? inrToPaise(updateDto.amount)
+            : existing.amountPaise;
+        const nextStatus = updateDto.status ?? existing.status;
+        if (nextStatus !== 'CANCELLED') {
+          await this.assertExpenseAcceptsVoucherAmount(
+            updateDto.expenseId,
+            nextAmountPaise,
+            existing._id.toString(),
+          );
+        }
         update.expenseId = new Types.ObjectId(updateDto.expenseId);
+      }
+    } else if (
+      this.resolveExpenseId(existing) &&
+      (updateDto.amount !== undefined || updateDto.status !== undefined)
+    ) {
+      const linkedExpenseId = this.resolveExpenseId(existing);
+      const nextAmountPaise =
+        updateDto.amount !== undefined
+          ? inrToPaise(updateDto.amount)
+          : existing.amountPaise;
+      const nextStatus = updateDto.status ?? existing.status;
+      if (linkedExpenseId && nextStatus !== 'CANCELLED') {
+        await this.assertExpenseAcceptsVoucherAmount(
+          linkedExpenseId,
+          nextAmountPaise,
+          existing._id.toString(),
+        );
       }
     }
     if (updateDto.referenceNumber !== undefined) {
@@ -403,6 +486,135 @@ export class VouchersService {
     return expense;
   }
 
+  private async assertExpenseAcceptsVoucherAmount(
+    expenseId: string,
+    amountPaise: number,
+    excludeVoucherId?: string,
+  ): Promise<void> {
+    const expense = await this.assertExpenseExists(expenseId);
+    const linked = await this.loadActiveLinkedVouchers(
+      expense._id,
+      excludeVoucherId,
+    );
+    const linkage = computeExpenseVoucherLinkage(
+      expense.amountPaise ?? 0,
+      linked,
+    );
+
+    if (isFullyVouchered(expense.amountPaise ?? 0, linked)) {
+      throw new ConflictException(
+        'This expense is already fully vouchered and cannot accept another voucher',
+      );
+    }
+
+    if (amountPaise > linkage.remainingEligibleAmountPaise) {
+      throw new BadRequestException(
+        `Voucher amount exceeds the remaining eligible amount for this expense (${paiseToInr(linkage.remainingEligibleAmountPaise)} INR)`,
+      );
+    }
+  }
+
+  /**
+   * Post-create guard against concurrent voucher creation overshooting the
+   * expense amount. Rolls back the new voucher when the race is detected.
+   */
+  private async assertExpenseLinkageStillValid(
+    expenseId: string,
+    createdVoucherId: string,
+  ): Promise<void> {
+    const expense = await this.assertExpenseExists(expenseId);
+    const linked = await this.loadActiveLinkedVouchers(expense._id);
+    const voucheredPaise = linked.reduce(
+      (sum, row) => sum + (row.amountPaise ?? 0),
+      0,
+    );
+
+    if (voucheredPaise <= (expense.amountPaise ?? 0)) {
+      return;
+    }
+
+    await this.voucherModel.findByIdAndDelete(createdVoucherId).exec();
+    throw new ConflictException(
+      'This expense was vouchered concurrently and can no longer accept this voucher',
+    );
+  }
+
+  private async loadActiveLinkedVouchers(
+    expenseObjectId: Types.ObjectId,
+    excludeVoucherId?: string,
+  ) {
+    const filter: Record<string, unknown> = {
+      expenseId: expenseObjectId,
+      status: { $in: [...ACTIVE_VOUCHER_STATUSES] },
+    };
+    if (excludeVoucherId && isValidObjectId(excludeVoucherId)) {
+      filter._id = { $ne: new Types.ObjectId(excludeVoucherId) };
+    }
+
+    return this.voucherModel
+      .find(filter)
+      .select({ _id: 1, voucherNumber: 1, amountPaise: 1, status: 1 })
+      .lean()
+      .exec();
+  }
+
+  private async computeSettlementCounts(
+    baseFilter: Record<string, unknown>,
+  ): Promise<VoucherSettlementCounts> {
+    const [unpaid, partiallyPaid, paid, outstandingAgg] = await Promise.all([
+      this.voucherModel
+        .countDocuments({
+          ...baseFilter,
+          $expr: settlementStatusExpression('UNPAID'),
+        })
+        .exec(),
+      this.voucherModel
+        .countDocuments({
+          ...baseFilter,
+          $expr: settlementStatusExpression('PARTIALLY_PAID'),
+        })
+        .exec(),
+      this.voucherModel
+        .countDocuments({
+          ...baseFilter,
+          $expr: settlementStatusExpression('PAID'),
+        })
+        .exec(),
+      this.voucherModel
+        .aggregate<{ totalOutstandingPaise: number }>([
+          { $match: baseFilter },
+          {
+            $group: {
+              _id: null,
+              totalOutstandingPaise: {
+                $sum: {
+                  $max: [
+                    0,
+                    {
+                      $subtract: [
+                        '$amountPaise',
+                        { $ifNull: ['$settledPaise', 0] },
+                      ],
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        ])
+        .exec(),
+    ]);
+
+    return {
+      unpaid,
+      partiallyPaid,
+      paid,
+      totalOutstandingAmount: paiseToInr(
+        outstandingAgg[0]?.totalOutstandingPaise ?? 0,
+      ),
+    };
+  }
+
   private async findDocumentById(
     id: string,
     populate = false,
@@ -499,7 +711,12 @@ export class VouchersService {
 
   private resolveExpenseSummary(
     voucher: VoucherDocument,
-  ): { id: string; expenseName: string; amount: number } | null {
+  ): {
+    id: string;
+    expenseName: string;
+    amount: number;
+    invoiceDate: string | null;
+  } | null {
     const ref = voucher.expenseId as ExpenseDocument | Types.ObjectId | null;
 
     if (!ref) {
@@ -517,11 +734,149 @@ export class VouchersService {
         id: expense._id.toString(),
         expenseName: expense.expenseName,
         amount: paiseToInr(expense.amountPaise),
+        invoiceDate: expense.date ? formatExpenseDate(expense.date) : null,
       };
     }
 
     const id = ref instanceof Types.ObjectId ? ref.toString() : String(ref);
-    return { id, expenseName: 'Unknown expense', amount: 0 };
+    return { id, expenseName: 'Unknown expense', amount: 0, invoiceDate: null };
+  }
+
+  private async resolveExpenseDetail(
+    voucher: VoucherDocument,
+  ): Promise<VoucherExpenseDetail | null> {
+    const expenseId = this.resolveExpenseId(voucher);
+    if (!expenseId) {
+      return null;
+    }
+
+    if (!isValidObjectId(expenseId)) {
+      return {
+        id: expenseId,
+        expenseName: 'Unknown expense',
+        amount: 0,
+        invoiceDate: null,
+        paidBy: '',
+        category: null,
+        notes: '',
+        receivedDate: null,
+        receipt: null,
+      };
+    }
+
+    const expense = await this.expenseModel
+      .findById(expenseId)
+      .populate('categoryId')
+      .exec();
+
+    if (!expense) {
+      return {
+        id: expenseId,
+        expenseName: 'Expense no longer available',
+        amount: 0,
+        invoiceDate: null,
+        paidBy: '',
+        category: null,
+        notes: '',
+        receivedDate: null,
+        receipt: null,
+      };
+    }
+
+    const categoryRef = expense.categoryId as
+      | ExpenseCategoryDocument
+      | Types.ObjectId
+      | undefined;
+    let category: { id: string; name: string } | null = null;
+    if (
+      categoryRef &&
+      typeof categoryRef === 'object' &&
+      '_id' in categoryRef &&
+      categoryRef._id &&
+      'name' in categoryRef
+    ) {
+      category = {
+        id: categoryRef._id.toString(),
+        name: categoryRef.name,
+      };
+    } else if (categoryRef) {
+      category = {
+        id:
+          categoryRef instanceof Types.ObjectId
+            ? categoryRef.toString()
+            : String(categoryRef),
+        name: 'Unknown category',
+      };
+    }
+
+    return {
+      id: expense._id.toString(),
+      expenseName: expense.expenseName,
+      amount: paiseToInr(expense.amountPaise),
+      invoiceDate: expense.date ? formatExpenseDate(expense.date) : null,
+      paidBy: expense.paidBy ?? '',
+      category,
+      notes: expense.notes ?? '',
+      receivedDate: expense.receivedDate
+        ? formatExpenseDate(expense.receivedDate)
+        : null,
+      receipt: expense.receipt
+        ? {
+            url: expense.receipt.url,
+            publicId: expense.receipt.publicId,
+            fileName: expense.receipt.fileName,
+            mimeType: expense.receipt.mimeType,
+          }
+        : null,
+    };
+  }
+
+  private async loadPaymentHistory(
+    voucherId: Types.ObjectId,
+  ): Promise<VoucherPaymentHistoryItem[]> {
+    const allocations = await this.paymentAllocationModel
+      .find({ voucherId })
+      .sort({ createdAt: -1 })
+      .lean()
+      .exec();
+
+    if (allocations.length === 0) {
+      return [];
+    }
+
+    const paymentIds = allocations.map((row) => row.paymentId);
+    const payments = await this.paymentModel
+      .find({ _id: { $in: paymentIds } })
+      .lean()
+      .exec();
+    const paymentById = new Map(
+      payments.map((payment) => [payment._id.toString(), payment]),
+    );
+
+    const items: VoucherPaymentHistoryItem[] = [];
+    for (const allocation of allocations) {
+      const payment = paymentById.get(allocation.paymentId.toString());
+      if (!payment) continue;
+      items.push({
+        id: payment._id.toString(),
+        paymentNumber: payment.paymentNumber,
+        paymentDate: formatExpenseDate(payment.paymentDate),
+        paymentMethod: payment.paymentMethod,
+        status: payment.status,
+        allocatedAmount: paiseToInr(allocation.amountPaise),
+        paymentAmount: paiseToInr(payment.amountPaise),
+        referenceNumber: payment.referenceNumber ?? '',
+        chequeNumber: payment.chequeNumber ?? '',
+        chequeDate: payment.chequeDate
+          ? formatExpenseDate(payment.chequeDate)
+          : null,
+        transferMethod: payment.transferMethod ?? '',
+        sourceAccount: payment.sourceAccount ?? '',
+      });
+    }
+
+    items.sort((a, b) => b.paymentDate.localeCompare(a.paymentDate));
+    return items;
   }
 
   private async safeDeleteDocument(document: {

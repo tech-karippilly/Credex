@@ -7,6 +7,15 @@ export type ExpenseReceipt = {
   mimeType: string;
 };
 
+export type ExpenseLinkedVoucher = {
+  id: string;
+  voucherNumber: string;
+  amount: number;
+  status: string;
+};
+
+export type ExpenseVoucherStatus = "NOT_VOUCHERED" | "VOUCHERED";
+
 export type Expense = {
   id: string;
   expenseName: string;
@@ -15,16 +24,32 @@ export type Expense = {
   paidBy: string;
   amount: number;
   currency: string;
+  /** @deprecated Use invoiceDate. Same value as invoiceDate for compatibility. */
   date: string;
+  /** Supplier invoice / bill date (YYYY-MM-DD). */
+  invoiceDate: string;
+  /** Date the company received the invoice, when tracked. */
+  receivedDate: string | null;
   receipt: ExpenseReceipt | null;
   notes: string;
+  voucherStatus: ExpenseVoucherStatus;
+  voucheredAmount: number;
+  remainingEligibleAmount: number;
+  vouchers: ExpenseLinkedVoucher[];
   createdAt: string;
   updatedAt: string;
+};
+
+export type ExpenseVoucherCounts = {
+  all: number;
+  notVouchered: number;
+  vouchered: number;
 };
 
 export type ExpenseListResult = {
   items: Expense[];
   totalAmount: number;
+  voucherCounts: ExpenseVoucherCounts;
   pagination: {
     page: number;
     limit: number;
@@ -44,7 +69,10 @@ export type CreateExpensePayload = {
   categoryId: string;
   paidBy: string;
   amount: number;
-  date: string;
+  invoiceDate: string;
+  /** Legacy alias; sent alongside invoiceDate for older API consumers. */
+  date?: string;
+  receivedDate?: string | null;
   notes?: string;
 };
 
@@ -53,7 +81,9 @@ export type UpdateExpensePayload = {
   categoryId?: string;
   paidBy?: string;
   amount?: number;
+  invoiceDate?: string;
   date?: string;
+  receivedDate?: string | null;
   notes?: string;
 };
 
@@ -61,15 +91,26 @@ export type ExpenseListQuery = {
   categoryId?: string;
   from?: string;
   to?: string;
+  voucherStatus?: ExpenseVoucherStatus;
+  eligibleForVoucher?: boolean;
+  search?: string;
   page?: number;
   limit?: number;
 };
+
+/** Prefer invoiceDate; fall back to legacy date for older API payloads. */
+export function expenseInvoiceDate(expense: Pick<Expense, "invoiceDate" | "date">): string {
+  return expense.invoiceDate || expense.date;
+}
 
 export function buildExpenseListQuery(params?: ExpenseListQuery): string {
   const search = new URLSearchParams();
   if (params?.categoryId) search.set("categoryId", params.categoryId);
   if (params?.from) search.set("from", params.from);
   if (params?.to) search.set("to", params.to);
+  if (params?.voucherStatus) search.set("voucherStatus", params.voucherStatus);
+  if (params?.eligibleForVoucher) search.set("eligibleForVoucher", "true");
+  if (params?.search) search.set("search", params.search);
   if (params?.page) search.set("page", String(params.page));
   if (params?.limit) search.set("limit", String(params.limit));
   const query = search.toString();

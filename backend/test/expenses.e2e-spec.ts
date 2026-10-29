@@ -175,6 +175,10 @@ describe('Expenses (e2e)', () => {
       expect(created.expenseName).toBe('AWS Hosting - October');
       expect(created.amount).toBe(5000);
       expect(created.currency).toBe('INR');
+      expect(created.date).toBe('2026-10-08');
+      expect(created.invoiceDate).toBe('2026-10-08');
+      expect(created.receivedDate).toBeNull();
+      expect(created.createdAt).toBeDefined();
 
       const list = await request(app.getHttpServer())
         .get('/api/v1/expenses')
@@ -197,6 +201,47 @@ describe('Expenses (e2e)', () => {
         .delete(`/api/v1/expenses/${created.id}`)
         .set('Authorization', `Bearer ${token}`)
         .expect(200);
+    });
+
+    it('accepts invoiceDate and receivedDate independently of createdAt', async () => {
+      const token = await loginAsAdmin();
+      const categoryId = await categoryIdByName(token, 'Server');
+      const created = await request(app.getHttpServer())
+        .post('/api/v1/expenses')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          expenseName: 'Backdated invoice',
+          categoryId,
+          paidBy: 'Vishnu KV',
+          amount: 1200,
+          invoiceDate: '2026-09-15',
+          receivedDate: '2026-09-20',
+        })
+        .expect(201)
+        .then((response) => response.body.data);
+
+      expect(created.invoiceDate).toBe('2026-09-15');
+      expect(created.date).toBe('2026-09-15');
+      expect(created.receivedDate).toBe('2026-09-20');
+      expect(created.createdAt.slice(0, 10)).not.toBe('2026-09-15');
+
+      const updated = await request(app.getHttpServer())
+        .put(`/api/v1/expenses/${created.id}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ receivedDate: null })
+        .expect(200);
+
+      expect(updated.body.data.invoiceDate).toBe('2026-09-15');
+      expect(updated.body.data.receivedDate).toBeNull();
+      expect(updated.body.data.createdAt).toBe(created.createdAt);
+    });
+
+    it('keeps legacy date-only creates working without receivedDate', async () => {
+      const token = await loginAsAdmin();
+      const created = await createExpense(token, { date: '2026-08-01' });
+      expect(created.invoiceDate).toBe('2026-08-01');
+      expect(created.date).toBe('2026-08-01');
+      expect(created.receivedDate).toBeNull();
     });
 
     it('updates fields without dropping the receipt or creating another expense', async () => {

@@ -30,8 +30,17 @@ export class Expense {
   @Prop({ required: true, default: EXPENSE_CURRENCY, enum: [EXPENSE_CURRENCY] })
   currency!: string;
 
+  /**
+   * Supplier invoice / bill date (date printed on the invoice).
+   * Kept as `date` for backward compatibility with existing documents and indexes.
+   * Exposed as `invoiceDate` in API responses.
+   */
   @Prop({ type: Date, required: true })
   date!: Date;
+
+  /** Date the company received the invoice, when tracked. Independent of invoice date and createdAt. */
+  @Prop({ type: Date, default: null })
+  receivedDate?: Date | null;
 
   @Prop({
     type: {

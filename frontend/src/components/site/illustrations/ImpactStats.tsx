@@ -28,16 +28,16 @@ function sparkPath(points: number[], w = 96, h = 32) {
 }
 
 function StatCard({ stat, index }: { stat: Stat; index: number }) {
-  const { ref, inView } = useReveal<HTMLDivElement>();
-  const value = useCountUp(stat.target, inView);
+  const { ref, playEntrance, animateCount } = useReveal<HTMLDivElement>();
+  const value = useCountUp(stat.target, animateCount);
   const Icon = stat.icon;
   const d = sparkPath(stat.spark);
 
   return (
     <div
       ref={ref}
-      className={`relative overflow-hidden p-6 sm:p-7 ${inView ? "animate-rise" : "opacity-0"}`}
-      style={inView ? { animationDelay: `${index * 90}ms` } : undefined}
+      className={`relative overflow-hidden p-6 sm:p-7${playEntrance ? " animate-rise" : ""}`}
+      style={playEntrance ? { animationDelay: `${index * 90}ms` } : undefined}
     >
       <div className="flex items-center gap-2.5">
         <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-amber-300">
@@ -65,7 +65,7 @@ function StatCard({ stat, index }: { stat: Stat; index: number }) {
   );
 }
 
-/** Full-bleed animated metrics band — counts up on scroll with inline sparklines. */
+/** Full-bleed metrics band. Figures show their real values immediately; a count-up runs only as the band scrolls into view. */
 export function ImpactStats() {
   return (
     <section className="container-site py-6 md:py-10">

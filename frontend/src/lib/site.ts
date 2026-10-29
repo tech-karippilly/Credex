@@ -27,7 +27,7 @@ export const company = {
   brand: "CREDEX",
   tagline: "The next-generation lending OS for India's NBFCs & MFIs.",
   website: "credexfin.com",
-  cin: "U62099KL2026PTC106127",
+  cin: "U62099KL2024PTC088363",
   location: "Irinjalakuda, Thrissur, Kerala, India",
 };
 
