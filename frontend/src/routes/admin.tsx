@@ -7,6 +7,7 @@ import {
   Users, Shield, Contact, IdCard, ChevronRight, UserRound,   Building2, IndianRupee, CalendarClock,
 } from "lucide-react";
 import { AdminAccessProvider, useCan } from "@/components/admin/admin-access";
+import { ApiCapabilitiesProvider } from "@/components/admin/api-capabilities-context";
 import { ExpenseCategoriesPanel } from "@/components/admin/expense-categories";
 import { FixedExpensesPanel } from "@/components/admin/fixed-expenses-panel";
 import { RolesPanel } from "@/components/admin/roles-panel";
@@ -48,8 +49,15 @@ import {
   type AdminAccess,
   type AdminNavGroupId,
   type AdminNavItem,
+  type AdminNavSection,
   type AdminTab,
 } from "@/lib/permissions";
+import {
+  adminTabSupportedByApi,
+  fetchApiCapabilities,
+  LEGACY_API_CAPABILITIES,
+  type ApiCapabilities,
+} from "@/lib/api-capabilities";
 
 export const Route = createFileRoute("/admin")({
   ssr: false,
@@ -72,6 +80,7 @@ export const Route = createFileRoute("/admin")({
 function AdminPage() {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [access, setAccess] = useState<AdminAccess | null>(null);
+  const [apiCapabilities, setApiCapabilities] = useState<ApiCapabilities>(LEGACY_API_CAPABILITIES);
   const [ready, setReady] = useState(false);
 
   const loadAccess = useCallback(async () => {
@@ -141,6 +150,11 @@ function AdminPage() {
     return () => window.removeEventListener("focus", onFocus);
   }, [user, loadAccess]);
 
+  useEffect(() => {
+    if (!access) return;
+    fetchApiCapabilities().then(setApiCapabilities).catch(() => setApiCapabilities(LEGACY_API_CAPABILITIES));
+  }, [access]);
+
   if (!ready || (user && !access))
     return <div className="flex min-h-screen items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>;
   if (!user || !access) return <Login onSignedIn={() => window.location.reload()} />;
@@ -154,7 +168,9 @@ function AdminPage() {
     );
   return (
     <AdminAccessProvider access={access}>
-      <Dashboard user={user} access={access} onProfile={(p) => setUser(p)} />
+      <ApiCapabilitiesProvider capabilities={apiCapabilities}>
+        <Dashboard user={user} access={access} apiCapabilities={apiCapabilities} onProfile={(p) => setUser(p)} />
+      </ApiCapabilitiesProvider>
     </AdminAccessProvider>
   );
 }
@@ -280,11 +296,41 @@ function AdminNavButton({
   );
 }
 
-function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminAccess; onProfile: (user: AuthUser) => void }) {
+function filterNavSections(sections: AdminNavSection[], capabilities: ApiCapabilities): AdminNavSection[] {
+  const filtered: AdminNavSection[] = [];
+  for (const section of sections) {
+    if (section.type === "item") {
+      if (adminTabSupportedByApi(section.item.id, capabilities)) {
+        filtered.push(section);
+      }
+      continue;
+    }
+    const items = section.items.filter((item) => adminTabSupportedByApi(item.id, capabilities));
+    if (items.length === 0) continue;
+    filtered.push({ ...section, items });
+  }
+  return filtered;
+}
+
+function Dashboard({
+  user,
+  access,
+  apiCapabilities,
+  onProfile,
+}: {
+  user: AuthUser;
+  access: AdminAccess;
+  apiCapabilities: ApiCapabilities;
+  onProfile: (user: AuthUser) => void;
+}) {
   const [tab, setTab] = useState<Tab>("overview");
   const [employeeListKey, setEmployeeListKey] = useState(0);
   const [groupOpen, setGroupOpen] = useState(DEFAULT_NAV_GROUP_OPEN);
-  const sections = adminNavSections(access);
+  const sections = filterNavSections(adminNavSections(access), apiCapabilities);
+  const backendNeedsUpdate =
+    !apiCapabilities.employees ||
+    !apiCapabilities.fixedExpenses ||
+    !apiCapabilities.expensePaymentStatusFilter;
 
   useEffect(() => {
     if (!canSeeAdminTab(access, tab)) setTab("overview");
@@ -363,6 +409,14 @@ function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminA
         <div className="mb-6 flex justify-end lg:hidden">
           <button onClick={signOut} className="btn btn-outline h-9 px-4 text-sm"><LogOut className="h-4 w-4" />Sign out</button>
         </div>
+        {backendNeedsUpdate && (
+          <p role="status" className="mb-6 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
+            The admin site is newer than the API at{" "}
+            <span className="font-medium">api.credexfin.com</span>. Redeploy the backend from the{" "}
+            <span className="font-medium">staging</span> branch (build, restart) so HR, fixed expenses, and expense
+            payment filters work. Until then, some menu items are hidden to avoid errors.
+          </p>
+        )}
         {tab === "overview" && <Overview go={setTab} access={access} />}
         {tab === "settings" && <SettingsPanel onSaved={refreshSite} />}
         {tab === "services" && <ServicesPanel onSaved={refreshSite} />}
