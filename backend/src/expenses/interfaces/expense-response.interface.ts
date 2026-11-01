@@ -21,7 +21,10 @@ export interface ExpenseResponse {
   amount: number;
   paymentStatus: SettlementStatus;
   currency: string;
+  /** Legacy alias for supplier invoice date (same as invoiceDate). */
   date: string;
+  invoiceDate: string;
+  receivedDate: string | null;
   receipt: ExpenseReceiptResponse | null;
   notes: string;
   fixedExpenseId: string | null;
@@ -48,6 +51,7 @@ export interface ReceiptAnalysisResponse {
   paidBy: string | null;
   amount: number | null;
   date: string | null;
+  invoiceDate: string | null;
   notes: string | null;
   confidence?: number;
 }

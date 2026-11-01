@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -45,6 +46,7 @@ export class ExpensesService {
     const document = expense as ExpenseDocument;
     const id = document._id ? document._id.toString() : '';
     const category = this.resolveCategorySummary(document);
+    const invoiceDate = formatExpenseDate(document.date);
 
     return {
       id,
@@ -55,7 +57,11 @@ export class ExpensesService {
       amount: paiseToInr(document.amountPaise),
       paymentStatus,
       currency: document.currency ?? EXPENSE_CURRENCY,
-      date: formatExpenseDate(document.date),
+      date: invoiceDate,
+      invoiceDate,
+      receivedDate: document.receivedDate
+        ? formatExpenseDate(document.receivedDate)
+        : null,
       receipt: document.receipt
         ? {
             url: document.receipt.url,
@@ -85,7 +91,12 @@ export class ExpensesService {
       paidBy: createExpenseDto.paidBy,
       amountPaise: inrToPaise(createExpenseDto.amount),
       currency: EXPENSE_CURRENCY,
-      date: parseExpenseDate(createExpenseDto.date),
+      date: parseExpenseDate(
+        this.resolveInvoiceDateString(createExpenseDto),
+      ),
+      receivedDate: createExpenseDto.receivedDate
+        ? parseExpenseDate(createExpenseDto.receivedDate)
+        : null,
       notes: createExpenseDto.notes?.trim() ?? '',
       receipt: null,
     });
@@ -199,8 +210,16 @@ export class ExpensesService {
     if (updateExpenseDto.amount !== undefined) {
       update.amountPaise = inrToPaise(updateExpenseDto.amount);
     }
-    if (updateExpenseDto.date !== undefined) {
-      update.date = parseExpenseDate(updateExpenseDto.date);
+    const invoiceDateValue =
+      updateExpenseDto.invoiceDate ?? updateExpenseDto.date;
+    if (invoiceDateValue !== undefined) {
+      update.date = parseExpenseDate(invoiceDateValue);
+    }
+    if (updateExpenseDto.receivedDate !== undefined) {
+      update.receivedDate =
+        updateExpenseDto.receivedDate === null
+          ? null
+          : parseExpenseDate(updateExpenseDto.receivedDate);
     }
     if (updateExpenseDto.notes !== undefined) {
       update.notes = updateExpenseDto.notes;
@@ -430,6 +449,19 @@ export class ExpensesService {
       const hex = id.toString();
       return [new Types.ObjectId(hex), hex];
     });
+  }
+
+  private resolveInvoiceDateString(input: {
+    invoiceDate?: string;
+    date?: string;
+  }): string {
+    const value = input.invoiceDate ?? input.date;
+    if (!value) {
+      throw new BadRequestException(
+        'Supplier invoice date is required (invoiceDate or date).',
+      );
+    }
+    return value;
   }
 
   private async populateCategory(

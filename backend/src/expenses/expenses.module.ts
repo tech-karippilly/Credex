@@ -5,7 +5,6 @@ import { AiModule } from '../ai/ai.module';
 import { AuthModule } from '../auth/auth.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
-import { Voucher, VoucherSchema } from '../vouchers/schemas/voucher.schema';
 import { ExpensesController } from './expenses.controller';
 import { ExpensesService } from './expenses.service';
 import { Expense, ExpenseSchema } from './schemas/expense.schema';
