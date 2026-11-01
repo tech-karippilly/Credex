@@ -173,10 +173,20 @@ Example response:
   "success": true,
   "message": "Backend is running",
   "data": {
-    "mongodb": "connected"
+    "mongodb": "connected",
+    "version": "0.0.1",
+    "capabilities": {
+      "expensePaymentStatusFilter": true,
+      "employees": true,
+      "fixedExpenses": true
+    }
   }
 }
 ```
+
+## Staging production API
+
+If the hosted admin shows errors such as `property paymentStatus should not exist` or `Cannot GET /api/v1/employees`, redeploy the backend from the `staging` branch. See [STAGING-DEPLOY.md](./STAGING-DEPLOY.md).
 
 ## License
 

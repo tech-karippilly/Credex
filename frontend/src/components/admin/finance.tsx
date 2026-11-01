@@ -12,6 +12,7 @@ import {
 } from "@/lib/expense-form";
 import { expensesApi, type Expense, type ExpenseCategory, type ExpensePaymentStatus, type ExpenseReceipt } from "@/lib/expenses-api";
 import { useCan } from "./admin-access";
+import { useApiCapabilities } from "./api-capabilities-context";
 import { LedgerPagination } from "./ledger-pagination";
 import { downloadReceiptFile, ReceiptViewer } from "./receipt-viewer";
 
@@ -80,6 +81,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
 
 export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }) {
   const can = useCan();
+  const apiCapabilities = useApiCapabilities();
   const [rows, setRows] = useState<Expense[] | null>(null);
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
@@ -142,7 +144,10 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
       categoryId: categoryId || undefined,
       from: appliedFrom || undefined,
       to: appliedTo || undefined,
-      paymentStatus: paymentStatus || undefined,
+      paymentStatus:
+        apiCapabilities.expensePaymentStatusFilter && paymentStatus
+          ? paymentStatus
+          : undefined,
     })
       .then((list) => {
         if (cancelled) return;
@@ -168,7 +173,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
     return () => {
       cancelled = true;
     };
-  }, [page, limit, categoryId, appliedFrom, appliedTo, paymentStatus, reloadToken]);
+  }, [page, limit, categoryId, appliedFrom, appliedTo, paymentStatus, reloadToken, apiCapabilities.expensePaymentStatusFilter]);
 
   function applyDateFilters() {
     const rangeError = dateRangeError(dateDraft.from, dateDraft.to);
@@ -397,6 +402,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
             ))}
           </select>
         </L>
+        {apiCapabilities.expensePaymentStatusFilter && (
         <L id="x-payment" label="Payment">
           <select
             id="x-payment"
@@ -414,6 +420,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
             <option value="PARTIALLY_PAID">Partially paid</option>
           </select>
         </L>
+        )}
         <button type="button" className="btn btn-primary h-9" onClick={applyDateFilters}>Apply filters</button>
         <button type="button" className="btn btn-outline h-9" onClick={clearFilters}>Clear filters</button>
       </div>
