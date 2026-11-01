@@ -4,13 +4,17 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   LayoutDashboard, Settings, Layers, Briefcase, FileText, Inbox, LogOut, Loader2, Plus, Trash2,
   Save, ExternalLink, Upload, Eye, EyeOff, Download, Wallet, Receipt, Tags, Banknote, BarChart3,
-  Users, Shield, Contact,
+  Users, Shield, Contact, IdCard, ChevronRight, UserRound,   Building2, IndianRupee, CalendarClock,
 } from "lucide-react";
 import { AdminAccessProvider, useCan } from "@/components/admin/admin-access";
 import { ExpenseCategoriesPanel } from "@/components/admin/expense-categories";
+import { FixedExpensesPanel } from "@/components/admin/fixed-expenses-panel";
 import { RolesPanel } from "@/components/admin/roles-panel";
 import { TeamPanel } from "@/components/admin/team-panel";
 import { LeadsPanel } from "@/components/admin/leads-panel";
+import { DepartmentsPanel, DesignationsPanel } from "@/components/admin/departments-panel";
+import { EmployeesPanel } from "@/components/admin/employees-panel";
+import { SalariesPanel } from "@/components/admin/salaries-panel";
 import { UsersPanel } from "@/components/admin/users-panel";
 import { Logo } from "@/components/site/Logo";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -38,9 +42,12 @@ import {
 } from "@/lib/cms-mappers";
 import { OG_IMAGE_URL, siteIconLinks } from "@/lib/site";
 import {
+  adminNavSections,
   canEnterAdmin,
   canSeeAdminTab,
   type AdminAccess,
+  type AdminNavGroupId,
+  type AdminNavItem,
   type AdminTab,
 } from "@/lib/permissions";
 
@@ -156,7 +163,7 @@ function Centered({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-surface px-4">
       <div className="card-site w-full max-w-md p-8 md:p-10">
-        <Link to="/" aria-label="Back to website"><Logo /></Link>
+        <Link to="/home" aria-label="Back to website"><Logo /></Link>
         <div className="mt-8">{children}</div>
       </div>
     </div>
@@ -216,33 +223,68 @@ const TAB_ICONS: Record<Tab, typeof Settings> = {
   enquiries: Inbox,
   leads: Contact,
   expenses: Wallet,
+  "fixed-expenses": CalendarClock,
   "expense-categories": Tags,
   vouchers: Receipt,
   payments: Banknote,
   reports: BarChart3,
+  employees: UserRound,
+  salaries: IndianRupee,
+  departments: Building2,
+  designations: UserRound,
   users: Users,
   roles: Shield,
 };
 
+const NAV_GROUP_ICONS: Record<AdminNavGroupId, typeof Settings> = {
+  hr: IdCard,
+  expenses: Wallet,
+  lead_management: Contact,
+  site_management: Settings,
+  career_management: Briefcase,
+  user_management: Users,
+};
+
+const DEFAULT_NAV_GROUP_OPEN: Record<AdminNavGroupId, boolean> = {
+  hr: false,
+  expenses: false,
+  lead_management: false,
+  site_management: false,
+  career_management: false,
+  user_management: false,
+};
+
+function AdminNavButton({
+  item,
+  tab,
+  onSelect,
+  nested = false,
+}: {
+  item: AdminNavItem;
+  tab: Tab;
+  onSelect: (tab: Tab) => void;
+  nested?: boolean;
+}) {
+  const Icon = TAB_ICONS[item.id];
+  const selected = tab === item.id;
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(item.id)}
+      aria-current={selected ? "page" : undefined}
+      className={`flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${nested ? "lg:pl-9" : ""} ${selected ? "bg-secondary text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+    >
+      <Icon className="h-4 w-4" />
+      {item.label}
+    </button>
+  );
+}
+
 function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminAccess; onProfile: (user: AuthUser) => void }) {
   const [tab, setTab] = useState<Tab>("overview");
-  const tabs = [
-    { id: "overview" as const, label: "Overview" },
-    { id: "settings" as const, label: "Site & Contact" },
-    { id: "services" as const, label: "Services" },
-    { id: "team" as const, label: "Team" },
-    { id: "jobs" as const, label: "Careers" },
-    { id: "applications" as const, label: "Applications" },
-    { id: "enquiries" as const, label: "Enquiries" },
-    { id: "leads" as const, label: "Leads" },
-    { id: "expenses" as const, label: "Expenses" },
-    { id: "expense-categories" as const, label: "Expense Categories" },
-    { id: "vouchers" as const, label: "Vouchers" },
-    { id: "payments" as const, label: "Payments" },
-    { id: "reports" as const, label: "Reports" },
-    { id: "users" as const, label: "Users" },
-    { id: "roles" as const, label: "Roles" },
-  ].filter((item) => canSeeAdminTab(access, item.id));
+  const [employeeListKey, setEmployeeListKey] = useState(0);
+  const [groupOpen, setGroupOpen] = useState(DEFAULT_NAV_GROUP_OPEN);
+  const sections = adminNavSections(access);
 
   useEffect(() => {
     if (!canSeeAdminTab(access, tab)) setTab("overview");
@@ -257,6 +299,13 @@ function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminA
     authApi.profile().then(onProfile).catch(() => undefined);
   }, [onProfile]);
 
+  function selectTab(next: Tab) {
+    if (next === "employees" && tab === "employees") {
+      setEmployeeListKey((value) => value + 1);
+    }
+    setTab(next);
+  }
+
   async function signOut() {
     await qc.cancelQueries();
     await authApi.logout();
@@ -267,22 +316,46 @@ function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminA
     <div className="min-h-screen bg-surface lg:grid lg:grid-cols-[260px_1fr]">
       <aside className="border-b border-border bg-card lg:sticky lg:top-0 lg:h-screen lg:border-b-0 lg:border-r">
         <div className="flex items-center justify-between p-5 lg:block">
-          <Link to="/" aria-label="View website"><Logo /></Link>
+          <Link to="/home" aria-label="View website"><Logo /></Link>
           <p className="hidden truncate pt-6 text-xs text-muted-foreground lg:block">{user.email}</p>
         </div>
-        <nav aria-label="Admin" className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:pb-0">
-          {tabs.map((t) => {
-            const Icon = TAB_ICONS[t.id];
+        <nav aria-label="Admin" className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-y-auto lg:pb-28">
+          {sections.map((section) => {
+            if (section.type === "item") {
+              return <AdminNavButton key={section.item.id} item={section.item} tab={tab} onSelect={selectTab} />;
+            }
+            const groupSelected = section.items.some((item) => item.id === tab);
+            const open = groupOpen[section.id] || groupSelected;
+            const GroupIcon = NAV_GROUP_ICONS[section.id];
+            const groupMenuId = `admin-nav-group-${section.id}`;
             return (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${tab === t.id ? "bg-secondary text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
-              <Icon className="h-4 w-4" />{t.label}
-            </button>
+              <div key={section.id} className="flex shrink-0 items-center gap-1 lg:flex-col lg:items-stretch">
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  aria-controls={groupMenuId}
+                  onClick={() =>
+                    setGroupOpen((value) => ({ ...value, [section.id]: !value[section.id] }))
+                  }
+                  className={`flex shrink-0 items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${groupSelected ? "text-primary" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                >
+                  <GroupIcon className="h-4 w-4" />
+                  {section.label}
+                  <ChevronRight className={`h-4 w-4 transition-transform lg:ml-auto ${open ? "rotate-90" : ""}`} />
+                </button>
+                {open && (
+                  <div id={groupMenuId} role="group" aria-label={section.label} className="flex gap-1 lg:flex-col">
+                    {section.items.map((item) => (
+                      <AdminNavButton key={item.id} item={item} tab={tab} onSelect={selectTab} nested />
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
         <div className="hidden space-y-1 p-3 lg:absolute lg:bottom-0 lg:block lg:w-full">
-          <a href="/" target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"><ExternalLink className="h-4 w-4" />View website</a>
+          <a href="/home" target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"><ExternalLink className="h-4 w-4" />View website</a>
           <button onClick={signOut} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted-foreground hover:bg-muted"><LogOut className="h-4 w-4" />Sign out</button>
         </div>
       </aside>
@@ -312,6 +385,7 @@ function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminA
           setTab("vouchers");
         }} />}
         {tab === "expense-categories" && <ExpenseCategoriesPanel />}
+        {tab === "fixed-expenses" && <FixedExpensesPanel />}
         {tab === "vouchers" && (
           <VouchersPanel
             draft={draft}
@@ -344,6 +418,10 @@ function Dashboard({ user, access, onProfile }: { user: AuthUser; access: AdminA
             }}
           />
         )}
+        {tab === "employees" && <EmployeesPanel key={employeeListKey} />}
+        {tab === "salaries" && <SalariesPanel />}
+        {tab === "departments" && <DepartmentsPanel />}
+        {tab === "designations" && <DesignationsPanel />}
         {tab === "users" && <UsersPanel />}
         {tab === "roles" && <RolesPanel />}
       </main>

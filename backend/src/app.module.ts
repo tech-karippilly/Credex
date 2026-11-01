@@ -13,9 +13,12 @@ import { CareersModule } from './careers/careers.module';
 import { ServicesModule } from './services/services.module';
 import { ExpenseCategoriesModule } from './expense-categories/expense-categories.module';
 import { ExpensesModule } from './expenses/expenses.module';
+import { FixedExpensesModule } from './fixed-expenses/fixed-expenses.module';
 import { PaymentsModule } from './payments/payments.module';
 import { ReportsModule } from './reports/reports.module';
 import { VouchersModule } from './vouchers/vouchers.module';
+import { EmployeesModule } from './employees/employees.module';
+import { SalariesModule } from './salaries/salaries.module';
 import { EnquiriesModule } from './enquiries/enquiries.module';
 import { SiteContactModule } from './site-contact/site-contact.module';
 import { TeamMembersModule } from './team-members/team-members.module';
@@ -45,8 +48,11 @@ import { UsersModule } from './users/users.module';
     TeamMembersModule,
     LeadsModule,
     EnquiriesModule,
+    EmployeesModule,
+    SalariesModule,
     ExpenseCategoriesModule,
     ExpensesModule,
+    FixedExpensesModule,
     VouchersModule,
     PaymentsModule,
     ReportsModule,

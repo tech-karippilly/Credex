@@ -21,7 +21,7 @@ export function Header() {
         Skip to content
       </a>
       <div className="container-site flex h-[72px] items-center justify-between gap-6">
-        <Link to="/" aria-label="CREDEX — Home" onClick={() => setOpen(false)}>
+        <Link to="/home" aria-label="CREDEX — Home" onClick={() => setOpen(false)}>
           <Logo />
         </Link>
         <nav aria-label="Main" className="hidden lg:block">
@@ -30,7 +30,7 @@ export function Header() {
               <li key={n.to}>
                 <Link
                   to={n.to}
-                  activeOptions={{ exact: n.to === "/" }}
+                  activeOptions={{ exact: n.to === "/home" }}
                   className="rounded-full px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-primary"
                   activeProps={{ className: "text-primary" }}
                 >
@@ -61,7 +61,7 @@ export function Header() {
               <li key={n.to}>
                 <Link
                   to={n.to}
-                  activeOptions={{ exact: n.to === "/" }}
+                  activeOptions={{ exact: n.to === "/home" }}
                   onClick={() => setOpen(false)}
                   className="block rounded-lg px-3 py-3 font-medium text-foreground hover:bg-muted"
                   activeProps={{ className: "text-primary" }}

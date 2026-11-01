@@ -9,6 +9,9 @@ import { isValidObjectId, Model, Types } from 'mongoose';
 import { ExpenseCategoriesService } from '../expense-categories/expense-categories.service';
 import { ExpenseCategoryDocument } from '../expense-categories/schemas/expense-category.schema';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { SettlementStatus } from '../payments/constants/payment.constants';
+import { settlementStatus } from '../payments/utils/payment-rules';
+import { Voucher, VoucherDocument } from '../vouchers/schemas/voucher.schema';
 import { EXPENSE_CURRENCY, EXPENSE_RECEIPT_FOLDER } from './constants/expense-categories';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 import { ExpenseQueryDto } from './dto/expense-query.dto';
@@ -29,11 +32,16 @@ export class ExpensesService {
   constructor(
     @InjectModel(Expense.name)
     private readonly expenseModel: Model<ExpenseDocument>,
+    @InjectModel(Voucher.name)
+    private readonly voucherModel: Model<VoucherDocument>,
     private readonly cloudinaryService: CloudinaryService,
     private readonly expenseCategoriesService: ExpenseCategoriesService,
   ) {}
 
-  toResponse(expense: ExpenseDocument | Expense): ExpenseResponse {
+  toResponse(
+    expense: ExpenseDocument | Expense,
+    paymentStatus: SettlementStatus = 'UNPAID',
+  ): ExpenseResponse {
     const document = expense as ExpenseDocument;
     const id = document._id ? document._id.toString() : '';
     const category = this.resolveCategorySummary(document);
@@ -45,6 +53,7 @@ export class ExpensesService {
       category,
       paidBy: document.paidBy,
       amount: paiseToInr(document.amountPaise),
+      paymentStatus,
       currency: document.currency ?? EXPENSE_CURRENCY,
       date: formatExpenseDate(document.date),
       receipt: document.receipt
@@ -56,6 +65,10 @@ export class ExpensesService {
           }
         : null,
       notes: document.notes ?? '',
+      fixedExpenseId: document.fixedExpenseId
+        ? document.fixedExpenseId.toString()
+        : null,
+      generatedForMonth: document.generatedForMonth ?? null,
       createdAt: document.createdAt?.toISOString() ?? new Date().toISOString(),
       updatedAt: document.updatedAt?.toISOString() ?? new Date().toISOString(),
     };
@@ -81,10 +94,42 @@ export class ExpensesService {
     return this.toResponse(populated);
   }
 
+  async createFromFixedExpense(params: {
+    fixedExpenseId: Types.ObjectId;
+    expenseName: string;
+    categoryId: Types.ObjectId;
+    paidBy: string;
+    amountPaise: number;
+    date: Date;
+    notes: string;
+    generatedForMonth: string;
+  }): Promise<ExpenseResponse> {
+    const created = await this.expenseModel.create({
+      expenseName: params.expenseName,
+      categoryId: params.categoryId,
+      paidBy: params.paidBy,
+      amountPaise: params.amountPaise,
+      currency: EXPENSE_CURRENCY,
+      date: params.date,
+      notes: params.notes,
+      receipt: null,
+      fixedExpenseId: params.fixedExpenseId,
+      generatedForMonth: params.generatedForMonth,
+    });
+
+    const populated = await this.populateCategory(created);
+    return this.toResponse(populated);
+  }
+
   async findAll(query: ExpenseQueryDto): Promise<ExpenseListResponse> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
     const filter = buildExpenseFilterFromQuery(query);
+    if (query.paymentStatus) {
+      filter._id = {
+        $in: await this.expenseIdsByPaymentStatus(filter, query.paymentStatus),
+      };
+    }
     const skip = (page - 1) * limit;
 
     const [items, total, totalAgg] = await Promise.all([
@@ -105,9 +150,15 @@ export class ExpensesService {
     ]);
 
     const totalPaise = totalAgg[0]?.totalPaise ?? 0;
+    const paymentStatuses = await this.paymentStatusByExpense(items);
 
     return {
-      items: items.map((item) => this.toResponse(item)),
+      items: items.map((item) =>
+        this.toResponse(
+          item,
+          paymentStatuses.get(item._id.toString()) ?? 'UNPAID',
+        ),
+      ),
       totalAmount: sumPaiseToInr(totalPaise),
       pagination: {
         page,
@@ -120,7 +171,11 @@ export class ExpensesService {
 
   async findOne(id: string): Promise<ExpenseResponse> {
     const expense = await this.findDocumentById(id, true);
-    return this.toResponse(expense);
+    const paymentStatuses = await this.paymentStatusByExpense([expense]);
+    return this.toResponse(
+      expense,
+      paymentStatuses.get(expense._id.toString()) ?? 'UNPAID',
+    );
   }
 
   async update(
@@ -296,6 +351,85 @@ export class ExpensesService {
       id,
       name: this.getCategoryDisplayName(expense),
     };
+  }
+
+  private async expenseIdsByPaymentStatus(
+    filter: Record<string, unknown>,
+    paymentStatus: SettlementStatus,
+  ): Promise<Types.ObjectId[]> {
+    const expenses = await this.expenseModel
+      .find(filter)
+      .select({ _id: 1, amountPaise: 1 })
+      .lean()
+      .exec();
+    if (expenses.length === 0) return [];
+
+    const settledByExpense = await this.settledPaiseByExpense(
+      expenses.map((expense) => expense._id),
+    );
+
+    return expenses
+      .filter(
+        (expense) =>
+          settlementStatus(
+            expense.amountPaise,
+            settledByExpense.get(expense._id.toString()) ?? 0,
+          ) === paymentStatus,
+      )
+      .map((expense) => expense._id);
+  }
+
+  private async paymentStatusByExpense(
+    expenses: ExpenseDocument[],
+  ): Promise<Map<string, SettlementStatus>> {
+    const settledByExpense = await this.settledPaiseByExpense(
+      expenses.map((expense) => expense._id),
+    );
+    return new Map(
+      expenses.map((expense) => {
+        const id = expense._id.toString();
+        return [
+          id,
+          settlementStatus(expense.amountPaise, settledByExpense.get(id) ?? 0),
+        ] as const;
+      }),
+    );
+  }
+
+  private async settledPaiseByExpense(
+    expenseIds: Types.ObjectId[],
+  ): Promise<Map<string, number>> {
+    if (expenseIds.length === 0) return new Map();
+
+    const rows = await this.voucherModel
+      .aggregate<{ _id: Types.ObjectId | string; settledPaise: number }>([
+        {
+          $match: {
+            expenseId: { $in: this.expenseIdMatchValues(expenseIds) },
+            status: { $ne: 'CANCELLED' },
+          },
+        },
+        {
+          $group: {
+            _id: '$expenseId',
+            settledPaise: { $sum: { $ifNull: ['$settledPaise', 0] } },
+          },
+        },
+      ])
+      .exec();
+
+    return new Map(
+      rows.map((row) => [row._id.toString(), row.settledPaise] as const),
+    );
+  }
+
+  private expenseIdMatchValues(
+    expenseIds: Types.ObjectId[],
+  ): Array<Types.ObjectId | string> {
+    return expenseIds.flatMap((id) => {
+      const hex = id.toString();
+      return [new Types.ObjectId(hex), hex];
+    });
   }
 
   private async populateCategory(

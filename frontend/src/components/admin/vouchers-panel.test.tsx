@@ -45,6 +45,7 @@ const expense: Expense = {
   category: { id: "cat-server", name: "Server" },
   paidBy: "Vishnu KV",
   amount: 5000,
+  paymentStatus: "UNPAID",
   currency: "INR",
   date: "2026-10-08",
   receipt: null,
@@ -171,7 +172,7 @@ describe("VouchersPanel editing", () => {
       voucherType: "PAYMENT",
       title: "Updated hosting",
       description: "October hosting",
-      paidBy: "Vishnu KV",
+      paidBy: "neuraforge.ai",
       payee: "Amazon",
       amount: 5200.5,
       paymentMode: "UPI",
@@ -370,7 +371,8 @@ describe("VouchersPanel editing", () => {
     expect(screen.queryByLabelText("Cheque date *")).not.toBeInTheDocument();
 
     fireEvent.change(screen.getByLabelText("Title *"), { target: { value: "Vendor cheque" } });
-    fireEvent.change(screen.getByLabelText("Paid by *"), { target: { value: "Vishnu KV" } });
+    expect(screen.getByLabelText("Paid by")).toHaveValue("neuraforge.ai");
+    expect(screen.getByLabelText("Paid by")).toHaveAttribute("readonly");
     fireEvent.change(screen.getByLabelText("Payee *"), { target: { value: "Vendor" } });
     fireEvent.change(screen.getByLabelText("Amount (₹) *"), { target: { value: "1500" } });
     fireEvent.change(screen.getByLabelText("Cheque number"), { target: { value: "CHQ-44" } });
@@ -380,6 +382,7 @@ describe("VouchersPanel editing", () => {
     const payload = create.mock.calls[0][0] as Record<string, unknown>;
     expect(payload).toMatchObject({
       title: "Vendor cheque",
+      paidBy: "neuraforge.ai",
       payee: "Vendor",
       amount: 1500,
       paymentMode: "CHEQUE",

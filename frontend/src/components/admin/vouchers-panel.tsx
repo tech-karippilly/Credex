@@ -23,7 +23,7 @@ import {
 } from "@/lib/expense-form";
 import { expensesApi, type Expense } from "@/lib/expenses-api";
 import { paymentsApi, type PaymentListItem } from "@/lib/payments-api";
-import { company as COMPANY, LOGO_URL } from "@/lib/site";
+import { company as COMPANY } from "@/lib/site";
 import {
   vouchersApi,
   type PaymentMode,
@@ -51,6 +51,9 @@ const PAYMENT_MODES: { value: PaymentMode; label: string }[] = [
   { value: "CHEQUE", label: "Cheque" },
   { value: "OTHER", label: "Other" },
 ];
+
+/** Every voucher is paid by the company. The form does not accept another payer. */
+const VOUCHER_PAID_BY = "neuraforge.ai";
 
 const VOUCHER_STATUSES: { value: VoucherStatus; label: string }[] = [
   { value: "DRAFT", label: "Draft" },
@@ -82,7 +85,7 @@ function emptyVoucherForm(): VoucherFormState {
     voucherType: "PAYMENT",
     title: "",
     description: "",
-    paidBy: "",
+    paidBy: VOUCHER_PAID_BY,
     payee: "",
     amount: "",
     paymentMode: "BANK_TRANSFER",
@@ -94,13 +97,12 @@ function emptyVoucherForm(): VoucherFormState {
   };
 }
 
-type VoucherField = "voucherDate" | "title" | "paidBy" | "payee" | "amount";
+type VoucherField = "voucherDate" | "title" | "payee" | "amount";
 
 function validateVoucherForm(form: VoucherFormState): Partial<Record<VoucherField, string>> {
   const errors: Partial<Record<VoucherField, string>> = {};
   if (!form.voucherDate) errors.voucherDate = "Voucher date is required.";
   if (!form.title.trim()) errors.title = "Title is required.";
-  if (!form.paidBy.trim()) errors.paidBy = "Paid by is required.";
   if (!form.payee.trim()) errors.payee = "Payee is required.";
   const amount = parseExpenseAmount(form.amount);
   if (!amount.ok) errors.amount = amount.message;
@@ -329,7 +331,7 @@ export function VouchersPanel({
       voucherType: draft.voucherType ?? "PAYMENT",
       title: draft.title ?? "",
       description: draft.description ?? "",
-      paidBy: draft.paidBy ?? "",
+      paidBy: VOUCHER_PAID_BY,
       payee: draft.payee ?? "",
       amount: draft.amount ?? "",
       paymentMode: draft.paymentMode ?? "BANK_TRANSFER",
@@ -404,7 +406,7 @@ export function VouchersPanel({
       voucherType: voucher.voucherType,
       title: voucher.title,
       description: voucher.description,
-      paidBy: voucher.paidBy,
+      paidBy: VOUCHER_PAID_BY,
       payee: voucher.payee,
       amount: formatAmountInput(voucher.amount),
       paymentMode: voucher.paymentMode,
@@ -432,7 +434,7 @@ export function VouchersPanel({
       voucherDate: form.voucherDate,
       voucherType: form.voucherType,
       title: form.title.trim(),
-      paidBy: form.paidBy.trim(),
+      paidBy: VOUCHER_PAID_BY,
       payee: form.payee.trim(),
       amount: amount.amount,
       paymentMode: form.paymentMode,
@@ -1009,19 +1011,14 @@ export function VouchersPanel({
                   ))}
                 </select>
               </L>
-              <div>
-                <L id="v-paid" label="Paid by *">
-                  <input
-                    id="v-paid"
-                    className="field"
-                    value={form.paidBy}
-                    aria-invalid={Boolean(fieldErrors.paidBy)}
-                    aria-describedby={fieldErrors.paidBy ? "v-paid-error" : undefined}
-                    onChange={(event) => setForm({ ...form, paidBy: event.target.value })}
-                  />
-                </L>
-                <FieldError id="v-paid-error" message={fieldErrors.paidBy} />
-              </div>
+              <L id="v-paid" label="Paid by">
+                <input
+                  id="v-paid"
+                  className="field bg-muted"
+                  value={VOUCHER_PAID_BY}
+                  readOnly
+                />
+              </L>
               <div>
                 <L id="v-payee" label="Payee *">
                   <input
@@ -1472,6 +1469,11 @@ export function VouchersPanel({
   );
 }
 
+const VOUCHER_ISSUER = {
+  legalName: "NEURAFORGE.AI PRIVATE LIMITED",
+  brand: "NEURAFORGE.AI",
+};
+
 const esc = (value: string) =>
   value.replace(
     /[&<>"]/g,
@@ -1534,11 +1536,12 @@ function printVoucher(voucher: Voucher) {
   }
   popup.document
     .write(`<!doctype html><html><head><title>Voucher ${voucher.voucherNumber}</title><style>
-  body{font-family:Arial,Helvetica,sans-serif;color:#00142B;margin:40px}
-  .box{border:2px solid #003C82;padding:32px;max-width:720px;margin:auto}
-  .hdr{display:flex;align-items:center;gap:20px;margin-bottom:4px}
-  .logo{height:72px;width:auto;max-width:140px;object-fit:contain}
-  h1{margin:0;color:#003C82;font-size:22px} .sub{font-size:12px;color:#555}
+  html{color-scheme:light}
+  body{font-family:Arial,Helvetica,sans-serif;color:#00142B;margin:40px;background:#fff}
+  .box{border:2px solid #003C82;padding:32px;max-width:720px;margin:auto;background:#fff}
+  .hdr{display:flex;align-items:center;gap:16px;margin-bottom:4px}
+  .logo{height:64px;width:64px;object-fit:contain}
+  h1{margin:0;color:#003C82;font-size:18px;line-height:1.25} .sub{font-size:12px;color:#555}
   .title{text-align:center;letter-spacing:4px;font-weight:bold;margin:24px 0;padding:8px;background:#F6F9FB;border:1px solid #ddd}
   .row{display:flex;justify-content:space-between;margin:6px 0;font-size:14px}
   table{width:100%;border-collapse:collapse;margin-top:16px;font-size:14px}
@@ -1547,7 +1550,7 @@ function printVoucher(voucher: Voucher) {
   .sig div{border-top:1px solid #00142B;padding-top:6px;width:30%;text-align:center}
   @media print{body{margin:0}}
   </style></head><body><div class="box">
-  <div class="hdr"><img class="logo" src="${esc(LOGO_URL)}" alt="${esc(COMPANY.brand)} logo" /><div><h1>${esc(COMPANY.legalName)}</h1><div class="sub">${esc("CIN: " + COMPANY.cin + " · " + COMPANY.location)}</div></div></div>
+  <div class="hdr"><img class="logo" src="${esc(`${window.location.origin}/neuraforge-logo.png`)}" alt="${esc(VOUCHER_ISSUER.brand)} logo" /><div><h1>${esc(VOUCHER_ISSUER.legalName)}</h1><div class="sub">${esc("CIN: " + COMPANY.cin + " · " + COMPANY.location)}</div></div></div>
   <div class="title">PAYMENT VOUCHER</div>
   <div class="row"><span><b>Voucher No:</b> ${esc(voucher.voucherNumber)}</span><span><b>Date:</b> ${esc(formatLedgerDate(voucher.voucherDate))}</span></div>
   <div class="row"><span><b>Paid by:</b> ${esc(voucher.paidBy)}</span><span><b>Payee:</b> ${esc(voucher.payee)}</span></div>

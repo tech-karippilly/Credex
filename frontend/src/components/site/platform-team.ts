@@ -3,7 +3,6 @@ import gayathri from "@/assets/team/gayathri.jpg";
 import vivek from "@/assets/team/vivek.jpg";
 import sinoy from "@/assets/team/sinoy.jpg";
 import sreejith from "@/assets/team/sreejith.jpg";
-import prasad from "@/assets/team/prasad.jpg";
 import yadhu from "@/assets/team/yadhu.jpg";
 import sreerag from "@/assets/team/sreerag.png";
 import shawn from "@/assets/team/shawn.jpg";
@@ -21,7 +20,6 @@ export type PlatformTeamMember = {
 export const platformTeam: PlatformTeamMember[] = [
   { name: "Sreerag", role: "Fullstack Developer", image: sreerag },
   { name: "Vishnu", role: "Fullstack Developer · Sales", image: vishnu },
-  { name: "Prasad", role: "Senior QA Developer", image: prasad },
   { name: "Vivek", role: "Fullstack Developer", image: vivek },
   { name: "Gayathri", role: "QA Engineer", image: gayathri },
   { name: "Jishnu", role: "QA Engineer", image: jishnu },

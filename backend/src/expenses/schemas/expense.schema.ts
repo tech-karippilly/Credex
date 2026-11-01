@@ -52,6 +52,13 @@ export class Expense {
   @Prop({ required: false, trim: true, default: '' })
   notes?: string;
 
+  @Prop({ type: Types.ObjectId, default: null, index: true })
+  fixedExpenseId?: Types.ObjectId | null;
+
+  /** YYYY-MM when this row was generated from a fixed expense template. */
+  @Prop({ type: String, required: false, trim: true, default: null })
+  generatedForMonth?: string | null;
+
   createdAt?: Date;
   updatedAt?: Date;
 }
@@ -61,3 +68,13 @@ export const ExpenseSchema = SchemaFactory.createForClass(Expense);
 ExpenseSchema.index({ date: -1, createdAt: -1 });
 ExpenseSchema.index({ paidBy: 1 });
 ExpenseSchema.index({ categoryId: 1, date: -1 });
+ExpenseSchema.index(
+  { fixedExpenseId: 1, generatedForMonth: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      fixedExpenseId: { $type: 'objectId' },
+      generatedForMonth: { $type: 'string' },
+    },
+  },
+);

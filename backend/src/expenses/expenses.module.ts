@@ -8,13 +8,17 @@ import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { ExpensesController } from './expenses.controller';
 import { ExpensesService } from './expenses.service';
 import { Expense, ExpenseSchema } from './schemas/expense.schema';
+import { Voucher, VoucherSchema } from '../vouchers/schemas/voucher.schema';
 import { ExpenseExcelService } from './services/expense-excel.service';
 import { ExpenseReportService } from './services/expense-report.service';
 import { ReceiptAiService } from './services/receipt-ai.service';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Expense.name, schema: ExpenseSchema }]),
+    MongooseModule.forFeature([
+      { name: Expense.name, schema: ExpenseSchema },
+      { name: Voucher.name, schema: VoucherSchema },
+    ]),
     CloudinaryModule,
     AiModule,
     AuthModule,
@@ -28,5 +32,6 @@ import { ReceiptAiService } from './services/receipt-ai.service';
     ExpenseReportService,
     ExpenseExcelService,
   ],
+  exports: [ExpensesService],
 })
 export class ExpensesModule {}

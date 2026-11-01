@@ -1,3 +1,5 @@
+import { SettlementStatus } from '../../payments/constants/payment.constants';
+
 export interface ExpenseReceiptResponse {
   url: string;
   publicId: string;
@@ -17,10 +19,13 @@ export interface ExpenseResponse {
   category: ExpenseCategorySummary;
   paidBy: string;
   amount: number;
+  paymentStatus: SettlementStatus;
   currency: string;
   date: string;
   receipt: ExpenseReceiptResponse | null;
   notes: string;
+  fixedExpenseId: string | null;
+  generatedForMonth: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -33,6 +33,7 @@ const server: Expense = {
   category: { id: "cat-server", name: "Server" },
   paidBy: "Company account",
   amount: 100,
+  paymentStatus: "UNPAID",
   currency: "INR",
   date: "2026-10-08",
   receipt: null,
@@ -140,7 +141,29 @@ describe("ExpensesPanel", () => {
       expect(latest?.from).toBeUndefined();
       expect(latest?.to).toBeUndefined();
       expect(latest?.categoryId).toBeUndefined();
+      expect(latest?.paymentStatus).toBeUndefined();
       expect(latest?.page).toBe(1);
+    });
+  });
+
+  it("filters the list by paid or unpaid and shows the payment status", async () => {
+    render(<ExpensesPanel onVoucher={() => undefined} />);
+    expect(await screen.findByRole("cell", { name: "Unpaid" })).toBeInTheDocument();
+
+    list.mockResolvedValue(listResult({
+      items: [{ ...server, expenseName: "Paid hosting", paymentStatus: "PAID" }],
+    }));
+    fireEvent.change(screen.getByLabelText("Payment"), { target: { value: "PAID" } });
+
+    expect(await screen.findByRole("cell", { name: "Paid" })).toBeInTheDocument();
+    expect(screen.getByText("Paid hosting")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(calls().at(-1)).toMatchObject({ paymentStatus: "PAID", page: 1 });
+    });
+
+    fireEvent.change(screen.getByLabelText("Payment"), { target: { value: "UNPAID" } });
+    await waitFor(() => {
+      expect(calls().at(-1)).toMatchObject({ paymentStatus: "UNPAID", page: 1 });
     });
   });
 
@@ -393,5 +416,102 @@ describe("ExpensesPanel", () => {
     expect(create).not.toHaveBeenCalled();
     expect(deleteExpense).not.toHaveBeenCalled();
     expect(screen.getByRole("dialog", { name: "Edit Expense" })).toBeInTheDocument();
+  });
+
+  it("opens an image receipt in the viewer instead of a new tab", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    list.mockResolvedValue(listResult({
+      items: [{
+        ...server,
+        receipt: {
+          url: "https://files.example/receipt.jpg",
+          publicId: "receipt-1",
+          fileName: "october.jpg",
+          mimeType: "image/jpeg",
+        },
+      }],
+    }));
+    render(<ExpensesPanel onVoucher={() => undefined} />);
+    await screen.findByText("AWS hosting");
+
+    fireEvent.click(screen.getByRole("button", { name: "View receipt for AWS hosting" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "october.jpg" });
+    expect(dialog.querySelector("img")).toHaveAttribute("src", "https://files.example/receipt.jpg");
+    expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument();
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
+  });
+
+  it("shows a pdf receipt inside the viewer", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(["%PDF"], { type: "application/octet-stream" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:receipt");
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    list.mockResolvedValue(listResult({
+      items: [{
+        ...server,
+        receipt: {
+          url: "https://files.example/receipt.pdf",
+          publicId: "receipt-1",
+          fileName: "october.pdf",
+          mimeType: "application/pdf",
+        },
+      }],
+    }));
+    render(<ExpensesPanel onVoucher={() => undefined} />);
+    await screen.findByText("AWS hosting");
+
+    fireEvent.click(screen.getByRole("button", { name: "View receipt for AWS hosting" }));
+
+    expect(await screen.findByTitle("Receipt preview")).toHaveAttribute("src", "blob:receipt");
+    expect(fetchMock).toHaveBeenCalledWith("https://files.example/receipt.pdf");
+    expect(open).not.toHaveBeenCalled();
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+    vi.unstubAllGlobals();
+    open.mockRestore();
+  });
+
+  it("downloads the receipt only when Download is clicked", async () => {
+    const downloads: string[] = [];
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(["img"], { type: "image/jpeg" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:download");
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const originalClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function click() {
+      downloads.push(this.download);
+    };
+    list.mockResolvedValue(listResult({
+      items: [{
+        ...server,
+        receipt: {
+          url: "https://files.example/receipt.jpg",
+          publicId: "receipt-1",
+          fileName: "october.jpg",
+          mimeType: "image/jpeg",
+        },
+      }],
+    }));
+    render(<ExpensesPanel onVoucher={() => undefined} />);
+    await screen.findByText("AWS hosting");
+
+    fireEvent.click(screen.getByRole("button", { name: "Download receipt for AWS hosting" }));
+
+    await waitFor(() => expect(downloads).toEqual(["october.jpg"]));
+    expect(fetchMock).toHaveBeenCalledWith("https://files.example/receipt.jpg");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    HTMLAnchorElement.prototype.click = originalClick;
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+    vi.unstubAllGlobals();
   });
 });

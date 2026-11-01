@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Download, Loader2, Pencil, Plus, Receipt, Trash2, Upload } from "lucide-react";
+import { Download, Eye, Loader2, Pencil, Plus, Receipt, Trash2, Upload } from "lucide-react";
 import { apiErrorMessage } from "@/lib/api";
 import {
   clampPage,
@@ -10,13 +10,20 @@ import {
   parseExpenseAmount,
   receiptFileError,
 } from "@/lib/expense-form";
-import { expensesApi, type Expense, type ExpenseCategory } from "@/lib/expenses-api";
+import { expensesApi, type Expense, type ExpenseCategory, type ExpensePaymentStatus, type ExpenseReceipt } from "@/lib/expenses-api";
 import { useCan } from "./admin-access";
 import { LedgerPagination } from "./ledger-pagination";
+import { downloadReceiptFile, ReceiptViewer } from "./receipt-viewer";
 
 export { VouchersPanel, type VoucherDraft } from "./vouchers-panel";
 
 const inr = (n: number) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(Number(n));
+
+function paymentLabel(status: ExpensePaymentStatus | undefined): string {
+  if (status === "PAID") return "Paid";
+  if (status === "PARTIALLY_PAID") return "Partially paid";
+  return "Unpaid";
+}
 function L({ id, label, children }: { id: string; label: string; children: ReactNode }) {
   return <div><label htmlFor={id} className="mb-2 block text-sm font-semibold">{label}</label>{children}</div>;
 }
@@ -80,6 +87,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState<number>(20);
   const [categoryId, setCategoryId] = useState("");
+  const [paymentStatus, setPaymentStatus] = useState<ExpensePaymentStatus | "">("");
   const [dateDraft, setDateDraft] = useState({ from: "", to: "" });
   const [appliedFrom, setAppliedFrom] = useState("");
   const [appliedTo, setAppliedTo] = useState("");
@@ -101,6 +109,8 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
   const [existingReceipt, setExistingReceipt] = useState<Expense["receipt"]>(null);
   const [removeReceipt, setRemoveReceipt] = useState(false);
   const [editingCategory, setEditingCategory] = useState<{ id: string; name: string } | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<ExpenseReceipt | null>(null);
+  const [downloadingReceiptId, setDownloadingReceiptId] = useState<string | null>(null);
   const saveLock = useRef(false);
 
   const refreshList = useCallback(() => setReloadToken((token) => token + 1), []);
@@ -132,6 +142,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
       categoryId: categoryId || undefined,
       from: appliedFrom || undefined,
       to: appliedTo || undefined,
+      paymentStatus: paymentStatus || undefined,
     })
       .then((list) => {
         if (cancelled) return;
@@ -157,7 +168,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
     return () => {
       cancelled = true;
     };
-  }, [page, limit, categoryId, appliedFrom, appliedTo, reloadToken]);
+  }, [page, limit, categoryId, appliedFrom, appliedTo, paymentStatus, reloadToken]);
 
   function applyDateFilters() {
     const rangeError = dateRangeError(dateDraft.from, dateDraft.to);
@@ -177,6 +188,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
     setAppliedFrom("");
     setAppliedTo("");
     setCategoryId("");
+    setPaymentStatus("");
     setFilterError(null);
     setNotice(null);
     setPage(1);
@@ -309,8 +321,16 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
     }
   }
 
-  function openReceipt(url: string) {
-    window.open(url, "_blank", "noopener");
+  async function downloadReceipt(expenseId: string, receipt: ExpenseReceipt) {
+    setDownloadingReceiptId(expenseId);
+    setNotice(null);
+    try {
+      await downloadReceiptFile(receipt);
+    } catch {
+      setNotice({ ok: false, text: "Could not download the receipt." });
+    } finally {
+      setDownloadingReceiptId(null);
+    }
   }
 
   async function del(expense: Expense) {
@@ -325,7 +345,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
     }
   }
 
-  const filtersActive = Boolean(categoryId || appliedFrom || appliedTo);
+  const filtersActive = Boolean(categoryId || appliedFrom || appliedTo || paymentStatus);
   const recordLabel = `${pagination.total} expense ${pagination.total === 1 ? "record" : "records"} match the current filters.`;
 
   return (
@@ -377,6 +397,23 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
             ))}
           </select>
         </L>
+        <L id="x-payment" label="Payment">
+          <select
+            id="x-payment"
+            className="field h-9"
+            value={paymentStatus}
+            onChange={(event) => {
+              setPaymentStatus(event.target.value as ExpensePaymentStatus | "");
+              setNotice(null);
+              setPage(1);
+            }}
+          >
+            <option value="">All</option>
+            <option value="PAID">Paid</option>
+            <option value="UNPAID">Unpaid</option>
+            <option value="PARTIALLY_PAID">Partially paid</option>
+          </select>
+        </L>
         <button type="button" className="btn btn-primary h-9" onClick={applyDateFilters}>Apply filters</button>
         <button type="button" className="btn btn-outline h-9" onClick={clearFilters}>Clear filters</button>
       </div>
@@ -407,7 +444,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
         </div>
       ) : (
         <div className="card-site mt-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[980px] text-sm">
             <thead className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="p-4">Date</th>
@@ -415,6 +452,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
                 <th className="p-4">Category</th>
                 <th className="p-4">Paid By</th>
                 <th className="p-4 text-right">Amount (₹)</th>
+                <th className="p-4">Payment</th>
                 <th className="p-4">Receipt</th>
                 <th className="p-4 text-right">Actions</th>
               </tr>
@@ -427,12 +465,30 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
                   <td className="p-4">{expense.category.name}</td>
                   <td className="p-4">{expense.paidBy}</td>
                   <td className="whitespace-nowrap p-4 text-right font-semibold">{inr(Number(expense.amount))}</td>
+                  <td className="whitespace-nowrap p-4">{paymentLabel(expense.paymentStatus)}</td>
                   <td className="p-4">
                     {expense.receipt?.url ? (
-                      <button type="button" className="btn btn-outline h-8 px-3 text-sm" onClick={() => openReceipt(expense.receipt!.url)}>
-                        <Download className="h-4 w-4" />
-                        View
-                      </button>
+                      <div className="flex flex-nowrap gap-1">
+                        <button
+                          type="button"
+                          className="btn btn-outline h-8 px-3 text-sm"
+                          aria-label={`View receipt for ${expense.expenseName}`}
+                          onClick={() => setViewingReceipt(expense.receipt)}
+                        >
+                          <Eye className="h-4 w-4" />
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-outline h-8 px-3 text-sm"
+                          aria-label={`Download receipt for ${expense.expenseName}`}
+                          disabled={downloadingReceiptId === expense.id}
+                          onClick={() => downloadReceipt(expense.id, expense.receipt!)}
+                        >
+                          {downloadingReceiptId === expense.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                          Download
+                        </button>
+                      </div>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
@@ -470,7 +526,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
           role="presentation"
-          onMouseDown={() => { if (!busy) closeForm(); }}
+          onMouseDown={() => { if (!busy && !viewingReceipt) closeForm(); }}
         >
           <form
             role="dialog"
@@ -479,7 +535,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
             className="card-site max-h-[90vh] w-full max-w-2xl overflow-y-auto p-6"
             onMouseDown={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
-              if (event.key === "Escape" && !busy) closeForm();
+              if (event.key === "Escape" && !busy && !viewingReceipt) closeForm();
             }}
             onSubmit={saveExpense}
           >
@@ -589,7 +645,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
                 {editingId && existingReceipt && !file && !removeReceipt && (
                   <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
                     <span className="text-muted-foreground">Current receipt: {existingReceipt.fileName}</span>
-                    <button type="button" className="btn btn-outline h-8 px-3 text-sm" onClick={() => openReceipt(existingReceipt.url)}>View</button>
+                    <button type="button" className="btn btn-outline h-8 px-3 text-sm" onClick={() => setViewingReceipt(existingReceipt)}>View</button>
                     <button type="button" className="btn btn-outline h-8 px-3 text-sm" onClick={() => setRemoveReceipt(true)}>Remove receipt</button>
                   </div>
                 )}
@@ -623,6 +679,10 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
             </div>
           </form>
         </div>
+      )}
+
+      {viewingReceipt && (
+        <ReceiptViewer receipt={viewingReceipt} onClose={() => setViewingReceipt(null)} />
       )}
     </>
   );

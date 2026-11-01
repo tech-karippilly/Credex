@@ -1,5 +1,6 @@
 import { Transform } from 'class-transformer';
 import {
+  IsIn,
   IsInt,
   IsMongoId,
   IsOptional,
@@ -8,6 +9,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
+import { SETTLEMENT_STATUSES } from '../../payments/constants/payment.constants';
 
 export class ExpenseQueryDto {
   @IsOptional()
@@ -23,6 +25,10 @@ export class ExpenseQueryDto {
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   to?: string;
+
+  @IsOptional()
+  @IsIn(SETTLEMENT_STATUSES)
+  paymentStatus?: (typeof SETTLEMENT_STATUSES)[number];
 
   @IsOptional()
   @IsString()

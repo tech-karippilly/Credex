@@ -54,7 +54,7 @@ export function buildVoucherEmailHtml(
         <tr><td style="padding:24px">
           <p style="margin:0 0 16px;font-size:15px;line-height:1.5">${intro}</p>
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse">${tableRows}</table>
-          <p style="margin:20px 0 0;font-size:12px;color:#666;line-height:1.5">The voucher PDF is attached when available. This email was sent from the Credex admin panel and does not change the voucher payment status.</p>
+          <p style="margin:20px 0 0;font-size:12px;color:#666;line-height:1.5">The voucher PDF is attached when available. This email was sent from the ${escapeHtml(COMPANY.brand)} admin panel and does not change the voucher payment status.</p>
         </td></tr>
         <tr><td style="padding:16px 24px;background:#f9fafb;font-size:11px;color:#888;text-align:center">
           ${escapeHtml(COMPANY.legalName)} · ${escapeHtml(COMPANY.location)}

@@ -7,6 +7,8 @@ export type ExpenseReceipt = {
   mimeType: string;
 };
 
+export type ExpensePaymentStatus = "PAID" | "UNPAID" | "PARTIALLY_PAID";
+
 export type Expense = {
   id: string;
   expenseName: string;
@@ -14,10 +16,13 @@ export type Expense = {
   category: { id: string; name: string };
   paidBy: string;
   amount: number;
+  paymentStatus: ExpensePaymentStatus;
   currency: string;
   date: string;
   receipt: ExpenseReceipt | null;
   notes: string;
+  fixedExpenseId?: string | null;
+  generatedForMonth?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -61,6 +66,7 @@ export type ExpenseListQuery = {
   categoryId?: string;
   from?: string;
   to?: string;
+  paymentStatus?: ExpensePaymentStatus;
   page?: number;
   limit?: number;
 };
@@ -70,6 +76,7 @@ export function buildExpenseListQuery(params?: ExpenseListQuery): string {
   if (params?.categoryId) search.set("categoryId", params.categoryId);
   if (params?.from) search.set("from", params.from);
   if (params?.to) search.set("to", params.to);
+  if (params?.paymentStatus) search.set("paymentStatus", params.paymentStatus);
   if (params?.page) search.set("page", String(params.page));
   if (params?.limit) search.set("limit", String(params.limit));
   const query = search.toString();

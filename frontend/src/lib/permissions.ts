@@ -8,10 +8,15 @@ export type AdminTab =
   | "enquiries"
   | "leads"
   | "expenses"
+  | "fixed-expenses"
   | "expense-categories"
   | "vouchers"
   | "payments"
   | "reports"
+  | "employees"
+  | "salaries"
+  | "departments"
+  | "designations"
   | "users"
   | "roles";
 
@@ -20,11 +25,33 @@ export interface AdminAccess {
   permissions: string[];
 }
 
+export type AdminNavGroupId =
+  | "hr"
+  | "expenses"
+  | "lead_management"
+  | "site_management"
+  | "career_management"
+  | "user_management";
+
 export interface AdminNavItem {
   id: AdminTab;
   label: string;
   anyOf?: readonly string[];
+  group?: AdminNavGroupId;
 }
+
+export const ADMIN_NAV_GROUP_LABELS: Record<AdminNavGroupId, string> = {
+  hr: "HR",
+  expenses: "Expenses Management",
+  lead_management: "Lead Management",
+  site_management: "Site Management",
+  career_management: "Career Management",
+  user_management: "User Management",
+};
+
+export type AdminNavSection =
+  | { type: "item"; item: AdminNavItem }
+  | { type: "group"; id: AdminNavGroupId; label: string; items: AdminNavItem[] };
 
 /**
  * Navigation is based on read permissions.
@@ -34,20 +61,65 @@ export interface AdminNavItem {
  */
 export const ADMIN_NAV: readonly AdminNavItem[] = [
   { id: "overview", label: "Overview" },
-  { id: "settings", label: "Site & Contact", anyOf: ["site_contact.read", "site_contact.update"] },
-  { id: "services", label: "Services", anyOf: ["services.read"] },
-  { id: "team", label: "Team", anyOf: ["team_members.read"] },
-  { id: "jobs", label: "Careers", anyOf: ["careers.read"] },
-  { id: "applications", label: "Applications", anyOf: ["applications.read"] },
-  { id: "enquiries", label: "Enquiries", anyOf: ["enquiries.read"] },
-  { id: "leads", label: "Leads", anyOf: ["leads.read"] },
-  { id: "expenses", label: "Expenses", anyOf: ["expenses.read"] },
-  { id: "expense-categories", label: "Expense Categories", anyOf: ["expense_categories.read"] },
-  { id: "vouchers", label: "Vouchers", anyOf: ["vouchers.read"] },
-  { id: "payments", label: "Payments", anyOf: ["payments.read"] },
+  {
+    id: "settings",
+    label: "Site & Contact",
+    group: "site_management",
+    anyOf: ["site_contact.read", "site_contact.update"],
+  },
+  { id: "services", label: "Services", group: "site_management", anyOf: ["services.read"] },
+  { id: "team", label: "Team", group: "site_management", anyOf: ["team_members.read"] },
+  { id: "jobs", label: "Careers", group: "career_management", anyOf: ["careers.read"] },
+  {
+    id: "applications",
+    label: "Applications",
+    group: "career_management",
+    anyOf: ["applications.read"],
+  },
+  { id: "enquiries", label: "Enquiries", group: "lead_management", anyOf: ["enquiries.read"] },
+  { id: "leads", label: "Leads", group: "lead_management", anyOf: ["leads.read"] },
+  { id: "expenses", label: "Expenses", group: "expenses", anyOf: ["expenses.read"] },
+  {
+    id: "fixed-expenses",
+    label: "Fixed Expenses",
+    group: "expenses",
+    anyOf: ["fixed_expenses.read"],
+  },
+  {
+    id: "expense-categories",
+    label: "Expense Categories",
+    group: "expenses",
+    anyOf: ["expense_categories.read"],
+  },
+  { id: "vouchers", label: "Vouchers", group: "expenses", anyOf: ["vouchers.read"] },
+  { id: "payments", label: "Payments", group: "expenses", anyOf: ["payments.read"] },
   { id: "reports", label: "Reports", anyOf: ["reports.read"] },
-  { id: "users", label: "Users", anyOf: ["users.read"] },
-  { id: "roles", label: "Roles", anyOf: ["roles.read"] },
+  {
+    id: "employees",
+    label: "Employee Management",
+    group: "hr",
+    anyOf: ["employees.read"],
+  },
+  {
+    id: "salaries",
+    label: "Salary Management",
+    group: "hr",
+    anyOf: ["salaries.read"],
+  },
+  {
+    id: "departments",
+    label: "Departments",
+    group: "hr",
+    anyOf: ["employees.read"],
+  },
+  {
+    id: "designations",
+    label: "Designations",
+    group: "hr",
+    anyOf: ["employees.read"],
+  },
+  { id: "users", label: "Users", group: "user_management", anyOf: ["users.read"] },
+  { id: "roles", label: "Roles", group: "user_management", anyOf: ["roles.read"] },
 ];
 
 export const PERMISSION_MODULE_LABELS: Record<string, string> = {
@@ -61,10 +133,13 @@ export const PERMISSION_MODULE_LABELS: Record<string, string> = {
   enquiries: "Enquiries",
   leads: "Leads",
   expense_categories: "Expense Categories",
+  fixed_expenses: "Fixed Expenses",
   expenses: "Expenses",
   vouchers: "Vouchers",
   payments: "Payments",
   reports: "Reports",
+  employees: "Employees",
+  salaries: "Salary",
 };
 
 const ACTION_LABELS: Record<string, string> = {
@@ -100,9 +175,7 @@ export function hasAnyPermission(
 
 export function canEnterAdmin(access: AdminAccess): boolean {
   if (access.superAdmin) return true;
-  return ADMIN_NAV.some(
-    (item) => item.anyOf && hasAnyPermission(access.permissions, item.anyOf),
-  );
+  return ADMIN_NAV.some((item) => item.anyOf && hasAnyPermission(access.permissions, item.anyOf));
 }
 
 export function canSeeAdminTab(access: AdminAccess, tab: AdminTab): boolean {
@@ -113,6 +186,32 @@ export function canSeeAdminTab(access: AdminAccess, tab: AdminTab): boolean {
 
 export function visibleAdminTabs(access: AdminAccess): AdminNavItem[] {
   return ADMIN_NAV.filter((item) => canSeeAdminTab(access, item.id));
+}
+
+export function adminNavSections(access: AdminAccess): AdminNavSection[] {
+  const sections: AdminNavSection[] = [];
+  const groups = new Map<AdminNavGroupId, Extract<AdminNavSection, { type: "group" }>>();
+
+  for (const item of visibleAdminTabs(access)) {
+    if (!item.group) {
+      sections.push({ type: "item", item });
+      continue;
+    }
+    let group = groups.get(item.group);
+    if (!group) {
+      group = {
+        type: "group",
+        id: item.group,
+        label: ADMIN_NAV_GROUP_LABELS[item.group],
+        items: [],
+      };
+      groups.set(item.group, group);
+      sections.push(group);
+    }
+    group.items.push(item);
+  }
+
+  return sections;
 }
 
 export function permissionModuleLabel(module: string): string {
