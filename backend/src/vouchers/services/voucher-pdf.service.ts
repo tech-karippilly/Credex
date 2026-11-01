@@ -1,3 +1,5 @@
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { Injectable } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
 import { COMPANY } from '../../common/constants/company.constants';
@@ -7,6 +9,8 @@ import {
   formatPaymentModeLabel,
   formatVoucherDate,
 } from '../utils/voucher-format.util';
+
+const LOGO_PATH = join(__dirname, '../../../assets/neuraforge-logo.png');
 
 @Injectable()
 export class VoucherPdfService {
@@ -20,17 +24,36 @@ export class VoucherPdfService {
       doc.on('error', reject);
 
       const primary = COMPANY.primaryColor;
+      const left = doc.page.margins.left;
+      const top = doc.page.margins.top;
+      const logoSize = 52;
+      const hasLogo = existsSync(LOGO_PATH);
+
+      if (hasLogo) {
+        doc.image(LOGO_PATH, left, top, {
+          width: logoSize,
+          height: logoSize,
+        });
+      }
+
+      const textX = hasLogo ? left + logoSize + 14 : left;
+      const textWidth = doc.page.width - doc.page.margins.right - textX;
 
       doc
-        .fontSize(18)
+        .fontSize(16)
         .fillColor(primary)
-        .text(COMPANY.legalName, { align: 'left' });
+        .text(COMPANY.legalName, textX, top + 8, {
+          width: textWidth,
+          align: 'left',
+        });
       doc
         .fontSize(9)
         .fillColor('#555555')
-        .text(`CIN: ${COMPANY.cin} · ${COMPANY.location}`);
+        .text(`CIN: ${COMPANY.cin} · ${COMPANY.location}`, textX, top + 30, {
+          width: textWidth,
+        });
 
-      doc.moveDown(1.2);
+      doc.y = top + logoSize + 18;
       doc
         .fontSize(14)
         .fillColor('#00142B')

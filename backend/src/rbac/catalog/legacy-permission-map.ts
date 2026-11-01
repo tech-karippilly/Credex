@@ -31,10 +31,20 @@ const LEGACY_PERMISSION_MAP: Readonly<Record<string, readonly string[]>> = {
   SYSTEM_SETTINGS_VIEW: ['site_contact.read'],
   SYSTEM_SETTINGS_UPDATE: ['site_contact.update'],
 
-  ACCOUNT_VIEW: ['expenses.read', 'expense_categories.read'],
-  ACCOUNT_CREATE: ['expenses.create', 'expense_categories.create'],
-  ACCOUNT_UPDATE: ['expenses.update', 'expense_categories.update'],
-  ACCOUNT_DELETE: ['expenses.delete', 'expense_categories.delete'],
+  ACCOUNT_VIEW: ['expenses.read', 'expense_categories.read', 'fixed_expenses.read'],
+  ACCOUNT_CREATE: [
+    'expenses.create',
+    'expense_categories.create',
+    'fixed_expenses.create',
+    'fixed_expenses.generate',
+  ],
+  ACCOUNT_UPDATE: [
+    'expenses.update',
+    'expense_categories.update',
+    'fixed_expenses.update',
+    'fixed_expenses.status.update',
+  ],
+  ACCOUNT_DELETE: ['expenses.delete', 'expense_categories.delete', 'fixed_expenses.delete'],
 
   VOUCHER_VIEW: ['vouchers.read'],
   VOUCHER_CREATE: ['vouchers.create'],

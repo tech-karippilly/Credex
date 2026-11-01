@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/lib/api";
 import type { Expense, ExpenseListQuery, ExpenseListResult } from "@/lib/expenses-api";
 import { ExpensesPanel } from "./finance";
@@ -14,21 +14,17 @@ const { list, listCategories, create, update, uploadReceipt, deleteReceipt, dele
   deleteExpense: vi.fn(),
 }));
 
-vi.mock("@/lib/expenses-api", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/expenses-api")>("@/lib/expenses-api");
-  return {
-    ...actual,
-    expensesApi: {
-      list,
-      listCategories,
-      create,
-      update,
-      uploadReceipt,
-      deleteReceipt,
-      delete: deleteExpense,
-    },
-  };
-});
+vi.mock("@/lib/expenses-api", () => ({
+  expensesApi: {
+    list,
+    listCategories,
+    create,
+    update,
+    uploadReceipt,
+    deleteReceipt,
+    delete: deleteExpense,
+  },
+}));
 
 const server: Expense = {
   id: "exp-1",
@@ -37,42 +33,19 @@ const server: Expense = {
   category: { id: "cat-server", name: "Server" },
   paidBy: "Company account",
   amount: 100,
+  paymentStatus: "UNPAID",
   currency: "INR",
   date: "2026-10-08",
-  invoiceDate: "2026-10-08",
-  receivedDate: null,
   receipt: null,
   notes: "October",
-  voucherStatus: "NOT_VOUCHERED",
-  voucheredAmount: 0,
-  remainingEligibleAmount: 100,
-  vouchers: [],
   createdAt: "2026-10-08T00:00:00.000Z",
   updatedAt: "2026-10-08T00:00:00.000Z",
-};
-
-const voucheredExpense: Expense = {
-  ...server,
-  id: "exp-vouchered",
-  expenseName: "Office rent",
-  voucherStatus: "VOUCHERED",
-  voucheredAmount: 100,
-  remainingEligibleAmount: 0,
-  vouchers: [
-    {
-      id: "v-1",
-      voucherNumber: "VCH-2026-000010",
-      amount: 100,
-      status: "COMPLETED",
-    },
-  ],
 };
 
 function listResult(overrides: Partial<ExpenseListResult> = {}): ExpenseListResult {
   return {
     items: [server],
     totalAmount: 15000,
-    voucherCounts: { all: 25, notVouchered: 20, vouchered: 5 },
     pagination: { page: 1, limit: 20, total: 25, totalPages: 2 },
     ...overrides,
   };
@@ -142,13 +115,13 @@ describe("ExpensesPanel", () => {
     render(<ExpensesPanel onVoucher={() => undefined} />);
     await screen.findByText("AWS hosting");
 
-    fireEvent.change(screen.getByLabelText("From invoice date"), { target: { value: "2026-10-31" } });
-    fireEvent.change(screen.getByLabelText("To invoice date"), { target: { value: "2026-10-01" } });
+    fireEvent.change(screen.getByLabelText("From date"), { target: { value: "2026-10-31" } });
+    fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-10-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
     expect(screen.getByText("From date cannot be later than To date.")).toBeInTheDocument();
     expect(calls().every((query) => !query.from)).toBe(true);
 
-    fireEvent.change(screen.getByLabelText("To invoice date"), { target: { value: "2026-10-31" } });
+    fireEvent.change(screen.getByLabelText("To date"), { target: { value: "2026-10-31" } });
     fireEvent.change(screen.getByLabelText("Category"), { target: { value: "cat-server" } });
     fireEvent.click(screen.getByRole("button", { name: "Apply filters" }));
 
@@ -168,7 +141,29 @@ describe("ExpensesPanel", () => {
       expect(latest?.from).toBeUndefined();
       expect(latest?.to).toBeUndefined();
       expect(latest?.categoryId).toBeUndefined();
+      expect(latest?.paymentStatus).toBeUndefined();
       expect(latest?.page).toBe(1);
+    });
+  });
+
+  it("filters the list by paid or unpaid and shows the payment status", async () => {
+    render(<ExpensesPanel onVoucher={() => undefined} />);
+    expect(await screen.findByRole("cell", { name: "Unpaid" })).toBeInTheDocument();
+
+    list.mockResolvedValue(listResult({
+      items: [{ ...server, expenseName: "Paid hosting", paymentStatus: "PAID" }],
+    }));
+    fireEvent.change(screen.getByLabelText("Payment"), { target: { value: "PAID" } });
+
+    expect(await screen.findByRole("cell", { name: "Paid" })).toBeInTheDocument();
+    expect(screen.getByText("Paid hosting")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(calls().at(-1)).toMatchObject({ paymentStatus: "PAID", page: 1 });
+    });
+
+    fireEvent.change(screen.getByLabelText("Payment"), { target: { value: "UNPAID" } });
+    await waitFor(() => {
+      expect(calls().at(-1)).toMatchObject({ paymentStatus: "UNPAID", page: 1 });
     });
   });
 
@@ -215,9 +210,6 @@ describe("ExpensesPanel", () => {
         categoryId: "cat-server",
         paidBy: "Asha",
         amount: 10.5,
-        invoiceDate: expect.any(String),
-        date: expect.any(String),
-        receivedDate: null,
       }),
     );
     await waitFor(() => expect(uploadReceipt).toHaveBeenCalledWith("exp-1", expect.any(File)));
@@ -276,16 +268,13 @@ describe("ExpensesPanel", () => {
     expect(screen.getByRole("dialog", { name: "Edit Expense" })).toBeInTheDocument();
     expect(screen.getByLabelText("Expense name *")).toHaveValue("Domain renewal");
     expect(screen.getByLabelText("Amount (₹) *")).toHaveValue("200");
-    expect(screen.getByLabelText("Invoice date *")).toHaveValue("2026-10-08");
-    expect(screen.getByLabelText("Received date")).toHaveValue("");
-    expect(screen.getByText(/System entry time/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Date")).toHaveValue("2026-10-08");
     expect(screen.getByLabelText("Notes")).toHaveValue("October");
 
     fireEvent.change(screen.getByLabelText("Expense name *"), { target: { value: "Domain renewal updated" } });
     fireEvent.change(screen.getByLabelText("Category *"), { target: { value: "cat-domain" } });
     fireEvent.change(screen.getByLabelText("Amount (₹) *"), { target: { value: "250.25" } });
-    fireEvent.change(screen.getByLabelText("Invoice date *"), { target: { value: "2026-10-11" } });
-    fireEvent.change(screen.getByLabelText("Received date"), { target: { value: "2026-10-12" } });
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-10-11" } });
     fireEvent.change(screen.getByLabelText("Notes"), { target: { value: "Renewed early" } });
     fireEvent.click(screen.getByRole("button", { name: "Save Changes" }));
 
@@ -295,9 +284,7 @@ describe("ExpensesPanel", () => {
       categoryId: "cat-domain",
       paidBy: "Company account",
       amount: 250.25,
-      invoiceDate: "2026-10-11",
       date: "2026-10-11",
-      receivedDate: "2026-10-12",
       notes: "Renewed early",
     });
     expect(create).not.toHaveBeenCalled();
@@ -431,112 +418,100 @@ describe("ExpensesPanel", () => {
     expect(screen.getByRole("dialog", { name: "Edit Expense" })).toBeInTheDocument();
   });
 
-  describe("receipt preview", () => {
-    const withReceipt = {
-      ...server,
-      receipt: {
-        url: "https://files.example/receipt.pdf",
-        publicId: "receipt-1",
-        fileName: "october.pdf",
-        mimeType: "application/pdf",
-      },
-    };
-    const createObjectURL = vi.fn(() => "blob:expense-receipt");
-    const revokeObjectURL = vi.fn();
-    let clickSpy: ReturnType<typeof vi.spyOn>;
-
-    beforeEach(() => {
-      list.mockResolvedValue(listResult({ items: [withReceipt] }));
-      createObjectURL.mockClear();
-      revokeObjectURL.mockClear();
-      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-        ok: true,
-        blob: async () => new Blob(["%PDF-1.4"], { type: "application/pdf" }),
-      }));
-      vi.stubGlobal("URL", {
-        ...URL,
-        createObjectURL,
-        revokeObjectURL,
-      });
-      clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
-    });
-
-    afterEach(() => {
-      clickSpy.mockRestore();
-      vi.unstubAllGlobals();
-    });
-
-    it("opens a PDF preview from View Receipt without downloading", async () => {
-      render(<ExpensesPanel onVoucher={() => undefined} />);
-      await screen.findByText("AWS hosting");
-
-      fireEvent.click(screen.getByRole("button", { name: "View Receipt" }));
-
-      expect(await screen.findByRole("dialog", { name: "Receipt preview" })).toBeInTheDocument();
-      expect(await screen.findByTitle("Receipt october.pdf")).toBeInTheDocument();
-      expect(clickSpy).not.toHaveBeenCalled();
-      expect(fetch).toHaveBeenCalledWith(withReceipt.receipt.url);
-    });
-
-    it("downloads from the preview only when Download PDF is clicked", async () => {
-      render(<ExpensesPanel onVoucher={() => undefined} />);
-      await screen.findByText("AWS hosting");
-      fireEvent.click(screen.getByRole("button", { name: "View Receipt" }));
-      await screen.findByTitle("Receipt october.pdf");
-
-      fireEvent.click(screen.getByRole("button", { name: /Download PDF/i }));
-      expect(clickSpy).toHaveBeenCalledTimes(1);
-    });
-
-    it("can close and reopen the receipt preview", async () => {
-      render(<ExpensesPanel onVoucher={() => undefined} />);
-      await screen.findByText("AWS hosting");
-
-      fireEvent.click(screen.getByRole("button", { name: "View Receipt" }));
-      expect(await screen.findByRole("dialog", { name: "Receipt preview" })).toBeInTheDocument();
-      fireEvent.click(screen.getByRole("button", { name: /Close/i }));
-      await waitFor(() => {
-        expect(screen.queryByRole("dialog", { name: "Receipt preview" })).not.toBeInTheDocument();
-      });
-
-      fireEvent.click(screen.getByRole("button", { name: "View Receipt" }));
-      expect(await screen.findByRole("dialog", { name: "Receipt preview" })).toBeInTheDocument();
-      expect(await screen.findByTitle("Receipt october.pdf")).toBeInTheDocument();
-    });
-  });
-
-  it("shows not-vouchered status, counts, and filters by voucher status", async () => {
+  it("opens an image receipt in the viewer instead of a new tab", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    list.mockResolvedValue(listResult({
+      items: [{
+        ...server,
+        receipt: {
+          url: "https://files.example/receipt.jpg",
+          publicId: "receipt-1",
+          fileName: "october.jpg",
+          mimeType: "image/jpeg",
+        },
+      }],
+    }));
     render(<ExpensesPanel onVoucher={() => undefined} />);
-    expect(await screen.findByText("AWS hosting")).toBeInTheDocument();
-    expect(screen.getAllByText("Not vouchered").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("All expenses").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "Create voucher" })).toBeInTheDocument();
+    await screen.findByText("AWS hosting");
 
-    fireEvent.change(screen.getByLabelText("Voucher status"), {
-      target: { value: "VOUCHERED" },
-    });
-    await waitFor(() => {
-      expect(calls().some((query) => query.voucherStatus === "VOUCHERED")).toBe(true);
-    });
+    fireEvent.click(screen.getByRole("button", { name: "View receipt for AWS hosting" }));
+
+    const dialog = await screen.findByRole("dialog", { name: "october.jpg" });
+    expect(dialog.querySelector("img")).toHaveAttribute("src", "https://files.example/receipt.jpg");
+    expect(screen.getByRole("button", { name: "Download" })).toBeInTheDocument();
+    expect(open).not.toHaveBeenCalled();
+    open.mockRestore();
   });
 
-  it("shows vouchered expenses with a voucher link and hides create voucher when fully vouchered", async () => {
-    list.mockResolvedValue(
-      listResult({
-        items: [voucheredExpense],
-        voucherCounts: { all: 1, notVouchered: 0, vouchered: 1 },
-        pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
-      }),
-    );
-    const onOpenVoucher = vi.fn();
-    render(<ExpensesPanel onVoucher={() => undefined} onOpenVoucher={onOpenVoucher} />);
+  it("shows a pdf receipt inside the viewer", async () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(["%PDF"], { type: "application/octet-stream" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:receipt");
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    list.mockResolvedValue(listResult({
+      items: [{
+        ...server,
+        receipt: {
+          url: "https://files.example/receipt.pdf",
+          publicId: "receipt-1",
+          fileName: "october.pdf",
+          mimeType: "application/pdf",
+        },
+      }],
+    }));
+    render(<ExpensesPanel onVoucher={() => undefined} />);
+    await screen.findByText("AWS hosting");
 
-    expect(await screen.findByText("Office rent")).toBeInTheDocument();
-    expect(screen.getAllByText("Vouchered").length).toBeGreaterThan(0);
-    expect(screen.getByRole("button", { name: "VCH-2026-000010" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Create voucher" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "View receipt for AWS hosting" }));
 
-    fireEvent.click(screen.getByRole("button", { name: "VCH-2026-000010" }));
-    expect(onOpenVoucher).toHaveBeenCalledWith("VCH-2026-000010");
+    expect(await screen.findByTitle("Receipt preview")).toHaveAttribute("src", "blob:receipt");
+    expect(fetchMock).toHaveBeenCalledWith("https://files.example/receipt.pdf");
+    expect(open).not.toHaveBeenCalled();
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+    vi.unstubAllGlobals();
+    open.mockRestore();
+  });
+
+  it("downloads the receipt only when Download is clicked", async () => {
+    const downloads: string[] = [];
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob(["img"], { type: "image/jpeg" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:download");
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const originalClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function click() {
+      downloads.push(this.download);
+    };
+    list.mockResolvedValue(listResult({
+      items: [{
+        ...server,
+        receipt: {
+          url: "https://files.example/receipt.jpg",
+          publicId: "receipt-1",
+          fileName: "october.jpg",
+          mimeType: "image/jpeg",
+        },
+      }],
+    }));
+    render(<ExpensesPanel onVoucher={() => undefined} />);
+    await screen.findByText("AWS hosting");
+
+    fireEvent.click(screen.getByRole("button", { name: "Download receipt for AWS hosting" }));
+
+    await waitFor(() => expect(downloads).toEqual(["october.jpg"]));
+    expect(fetchMock).toHaveBeenCalledWith("https://files.example/receipt.jpg");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    HTMLAnchorElement.prototype.click = originalClick;
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+    vi.unstubAllGlobals();
   });
 });

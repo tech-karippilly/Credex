@@ -2,7 +2,7 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { getModelToken } from '@nestjs/mongoose';
 import { Test } from '@nestjs/testing';
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from '../src/app.module';
@@ -13,6 +13,7 @@ import { ResponseInterceptor } from '../src/common/interceptors/response.interce
 import { EmailService } from '../src/email/email.service';
 import { ExpenseCategory } from '../src/expense-categories/schemas/expense-category.schema';
 import { Expense } from '../src/expenses/schemas/expense.schema';
+import { Voucher } from '../src/vouchers/schemas/voucher.schema';
 import './setup-env';
 
 describe('Expenses (e2e)', () => {
@@ -20,6 +21,7 @@ describe('Expenses (e2e)', () => {
   let mongod: MongoMemoryServer;
   let expenseModel: Model<Expense>;
   let categoryModel: Model<ExpenseCategory>;
+  let voucherModel: Model<Voucher>;
 
   const cloudinaryService = {
     uploadImage: jest.fn(),
@@ -76,6 +78,7 @@ describe('Expenses (e2e)', () => {
     categoryModel = app.get<Model<ExpenseCategory>>(
       getModelToken(ExpenseCategory.name),
     );
+    voucherModel = app.get<Model<Voucher>>(getModelToken(Voucher.name));
   });
 
   afterAll(async () => {
@@ -85,6 +88,7 @@ describe('Expenses (e2e)', () => {
 
   beforeEach(async () => {
     await expenseModel.deleteMany({});
+    await voucherModel.deleteMany({});
     await categoryModel.deleteMany({});
     await categoryModel.insertMany([
       {
@@ -390,6 +394,115 @@ describe('Expenses (e2e)', () => {
         .expect(200);
 
       expect(search.body.data.items).toHaveLength(1);
+    });
+
+    it('filters expenses by paid, unpaid, and partially paid voucher settlement', async () => {
+      const token = await loginAsAdmin();
+      const unpaid = await createExpense(token, {
+        expenseName: 'Unpaid hosting',
+        amount: 100,
+      });
+      const paid = await createExpense(token, {
+        expenseName: 'Paid domain',
+        amount: 200,
+      });
+      const partial = await createExpense(token, {
+        expenseName: 'Partial software',
+        amount: 300,
+      });
+      const cancelled = await createExpense(token, {
+        expenseName: 'Cancelled voucher',
+        amount: 400,
+      });
+
+      await voucherModel.create([
+        {
+          voucherNumber: 'PV-PAID',
+          voucherDate: new Date('2026-10-08'),
+          voucherType: 'PAYMENT',
+          title: 'Domain',
+          paidBy: 'Vishnu KV',
+          payee: 'Registrar',
+          amountPaise: 20000,
+          settledPaise: 20000,
+          reservedPaise: 20000,
+          currency: 'INR',
+          paymentMode: 'UPI',
+          status: 'COMPLETED',
+          expenseId: new Types.ObjectId(paid.id),
+        },
+        {
+          voucherNumber: 'PV-PARTIAL',
+          voucherDate: new Date('2026-10-08'),
+          voucherType: 'PAYMENT',
+          title: 'Software',
+          paidBy: 'Vishnu KV',
+          payee: 'Vendor',
+          amountPaise: 30000,
+          settledPaise: 10000,
+          reservedPaise: 10000,
+          currency: 'INR',
+          paymentMode: 'UPI',
+          status: 'COMPLETED',
+          expenseId: new Types.ObjectId(partial.id),
+        },
+        {
+          voucherNumber: 'PV-CANCELLED',
+          voucherDate: new Date('2026-10-08'),
+          voucherType: 'PAYMENT',
+          title: 'Cancelled',
+          paidBy: 'Vishnu KV',
+          payee: 'Vendor',
+          amountPaise: 40000,
+          settledPaise: 40000,
+          reservedPaise: 0,
+          currency: 'INR',
+          paymentMode: 'UPI',
+          status: 'CANCELLED',
+          expenseId: new Types.ObjectId(cancelled.id),
+        },
+      ]);
+
+      const paidOnly = await request(app.getHttpServer())
+        .get('/api/v1/expenses?paymentStatus=PAID')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(paidOnly.body.data.items.map((item: { expenseName: string }) => item.expenseName)).toEqual([
+        'Paid domain',
+      ]);
+      expect(paidOnly.body.data.totalAmount).toBe(200);
+
+      const unpaidOnly = await request(app.getHttpServer())
+        .get('/api/v1/expenses?paymentStatus=UNPAID')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(unpaidOnly.body.data.items.map((item: { expenseName: string }) => item.expenseName).sort()).toEqual([
+        'Cancelled voucher',
+        'Unpaid hosting',
+      ]);
+
+      const partialOnly = await request(app.getHttpServer())
+        .get('/api/v1/expenses?paymentStatus=PARTIALLY_PAID')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      expect(partialOnly.body.data.items).toHaveLength(1);
+      expect(partialOnly.body.data.items[0].expenseName).toBe('Partial software');
+      expect(partialOnly.body.data.items[0].paymentStatus).toBe('PARTIALLY_PAID');
+
+      const all = await request(app.getHttpServer())
+        .get('/api/v1/expenses')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+      const statuses = Object.fromEntries(
+        all.body.data.items.map((item: { id: string; paymentStatus: string }) => [
+          item.id,
+          item.paymentStatus,
+        ]),
+      );
+      expect(statuses[unpaid.id]).toBe('UNPAID');
+      expect(statuses[paid.id]).toBe('PAID');
+      expect(statuses[partial.id]).toBe('PARTIALLY_PAID');
+      expect(statuses[cancelled.id]).toBe('UNPAID');
     });
   });
 

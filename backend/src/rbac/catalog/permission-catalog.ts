@@ -97,6 +97,21 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = [
   permission('expenses', 'export', 'Export expense reports'),
   permission('expenses', 'analyze', 'Analyze expense receipts'),
 
+  permission('fixed_expenses', 'read', 'View fixed monthly expenses'),
+  permission('fixed_expenses', 'create', 'Create fixed monthly expenses'),
+  permission('fixed_expenses', 'update', 'Update fixed monthly expenses'),
+  permission('fixed_expenses', 'delete', 'Delete fixed monthly expenses'),
+  permission(
+    'fixed_expenses',
+    'status.update',
+    'Activate or deactivate fixed monthly expenses',
+  ),
+  permission(
+    'fixed_expenses',
+    'generate',
+    'Generate expense records from fixed monthly expenses',
+  ),
+
   permission('vouchers', 'read', 'View vouchers'),
   permission('vouchers', 'create', 'Create vouchers'),
   permission('vouchers', 'update', 'Update vouchers'),
@@ -113,14 +128,15 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = [
   permission('reports', 'read', 'View financial reports'),
   permission('reports', 'export', 'Export financial reports'),
 
+  permission('employees', 'read', 'View Neuraforge employee records'),
+  permission('employees', 'create', 'Add Neuraforge employees'),
   permission(
-    'dashboard',
-    'expenses_summary.read',
-    'View the Expenses Summary card on the admin dashboard',
+    'employees',
+    'update',
+    'Update Neuraforge employee records and documents',
   ),
-  permission(
-    'dashboard',
-    'expenses_by_category.read',
-    'View the Expenses by Category card on the admin dashboard',
-  ),
+  permission('employees', 'status.update', 'Change Neuraforge employee status'),
+
+  permission('salaries', 'read', 'View employee salaries'),
+  permission('salaries', 'update', 'Update employee salary details'),
 ];

@@ -1,5 +1,4 @@
 import {
-  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -10,6 +9,8 @@ import { isValidObjectId, Model, Types } from 'mongoose';
 import { ExpenseCategoriesService } from '../expense-categories/expense-categories.service';
 import { ExpenseCategoryDocument } from '../expense-categories/schemas/expense-category.schema';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
+import { SettlementStatus } from '../payments/constants/payment.constants';
+import { settlementStatus } from '../payments/utils/payment-rules';
 import { Voucher, VoucherDocument } from '../vouchers/schemas/voucher.schema';
 import { EXPENSE_CURRENCY, EXPENSE_RECEIPT_FOLDER } from './constants/expense-categories';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -18,22 +19,11 @@ import { UpdateExpenseDto } from './dto/update-expense.dto';
 import {
   ExpenseListResponse,
   ExpenseResponse,
-  ExpenseVoucherCounts,
 } from './interfaces/expense-response.interface';
 import { Expense, ExpenseDocument } from './schemas/expense.schema';
 import { buildExpenseFilterFromQuery } from './utils/expense-filter.util';
 import { formatExpenseDate, parseExpenseDate } from './utils/expense-date.util';
-import {
-  ACTIVE_VOUCHER_STATUSES,
-  computeExpenseVoucherLinkage,
-  LinkedVoucherSummaryInput,
-} from './utils/expense-voucher.util';
 import { inrToPaise, paiseToInr, sumPaiseToInr } from './utils/money.util';
-
-type VoucheredSumRow = {
-  _id: Types.ObjectId;
-  voucheredPaise: number;
-};
 
 @Injectable()
 export class ExpensesService {
@@ -50,16 +40,11 @@ export class ExpensesService {
 
   toResponse(
     expense: ExpenseDocument | Expense,
-    linkedVouchers: LinkedVoucherSummaryInput[] = [],
+    paymentStatus: SettlementStatus = 'UNPAID',
   ): ExpenseResponse {
     const document = expense as ExpenseDocument;
     const id = document._id ? document._id.toString() : '';
     const category = this.resolveCategorySummary(document);
-    const invoiceDate = formatExpenseDate(document.date);
-    const linkage = computeExpenseVoucherLinkage(
-      document.amountPaise ?? 0,
-      linkedVouchers,
-    );
 
     return {
       id,
@@ -68,12 +53,9 @@ export class ExpensesService {
       category,
       paidBy: document.paidBy,
       amount: paiseToInr(document.amountPaise),
+      paymentStatus,
       currency: document.currency ?? EXPENSE_CURRENCY,
-      date: invoiceDate,
-      invoiceDate,
-      receivedDate: document.receivedDate
-        ? formatExpenseDate(document.receivedDate)
-        : null,
+      date: formatExpenseDate(document.date),
       receipt: document.receipt
         ? {
             url: document.receipt.url,
@@ -83,15 +65,10 @@ export class ExpensesService {
           }
         : null,
       notes: document.notes ?? '',
-      voucherStatus: linkage.voucherStatus,
-      voucheredAmount: paiseToInr(linkage.voucheredAmountPaise),
-      remainingEligibleAmount: paiseToInr(linkage.remainingEligibleAmountPaise),
-      vouchers: linkage.vouchers.map((voucher) => ({
-        id: voucher.id,
-        voucherNumber: voucher.voucherNumber,
-        amount: paiseToInr(voucher.amountPaise),
-        status: voucher.status,
-      })),
+      fixedExpenseId: document.fixedExpenseId
+        ? document.fixedExpenseId.toString()
+        : null,
+      generatedForMonth: document.generatedForMonth ?? null,
       createdAt: document.createdAt?.toISOString() ?? new Date().toISOString(),
       updatedAt: document.updatedAt?.toISOString() ?? new Date().toISOString(),
     };
@@ -102,48 +79,58 @@ export class ExpensesService {
       createExpenseDto.categoryId,
     );
 
-    const invoiceDate = this.resolveInvoiceDateInput(createExpenseDto);
-
     const created = await this.expenseModel.create({
       expenseName: createExpenseDto.expenseName,
       categoryId: new Types.ObjectId(createExpenseDto.categoryId),
       paidBy: createExpenseDto.paidBy,
       amountPaise: inrToPaise(createExpenseDto.amount),
       currency: EXPENSE_CURRENCY,
-      date: parseExpenseDate(invoiceDate),
-      receivedDate: createExpenseDto.receivedDate
-        ? parseExpenseDate(createExpenseDto.receivedDate)
-        : null,
+      date: parseExpenseDate(createExpenseDto.date),
       notes: createExpenseDto.notes?.trim() ?? '',
       receipt: null,
     });
 
     const populated = await this.populateCategory(created);
-    return this.toResponse(populated, []);
+    return this.toResponse(populated);
+  }
+
+  async createFromFixedExpense(params: {
+    fixedExpenseId: Types.ObjectId;
+    expenseName: string;
+    categoryId: Types.ObjectId;
+    paidBy: string;
+    amountPaise: number;
+    date: Date;
+    notes: string;
+    generatedForMonth: string;
+  }): Promise<ExpenseResponse> {
+    const created = await this.expenseModel.create({
+      expenseName: params.expenseName,
+      categoryId: params.categoryId,
+      paidBy: params.paidBy,
+      amountPaise: params.amountPaise,
+      currency: EXPENSE_CURRENCY,
+      date: params.date,
+      notes: params.notes,
+      receipt: null,
+      fixedExpenseId: params.fixedExpenseId,
+      generatedForMonth: params.generatedForMonth,
+    });
+
+    const populated = await this.populateCategory(created);
+    return this.toResponse(populated);
   }
 
   async findAll(query: ExpenseQueryDto): Promise<ExpenseListResponse> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
+    const filter = buildExpenseFilterFromQuery(query);
+    if (query.paymentStatus) {
+      filter._id = {
+        $in: await this.expenseIdsByPaymentStatus(filter, query.paymentStatus),
+      };
+    }
     const skip = (page - 1) * limit;
-    const baseFilter = buildExpenseFilterFromQuery(query);
-
-    const [voucherCounts, linkedExpenseIds, voucheredSums] = await Promise.all([
-      this.countVoucherStatuses(baseFilter),
-      this.listLinkedExpenseIds(),
-      this.sumVoucheredPaiseByExpense(),
-    ]);
-
-    const fullyCoveredIds = query.eligibleForVoucher
-      ? await this.resolveFullyCoveredIds(voucheredSums)
-      : [];
-
-    const filter = this.applyVoucherFilters(
-      baseFilter,
-      query,
-      linkedExpenseIds,
-      fullyCoveredIds,
-    );
 
     const [items, total, totalAgg] = await Promise.all([
       this.expenseModel
@@ -162,19 +149,17 @@ export class ExpensesService {
         .exec(),
     ]);
 
-    const pageIds = items
-      .map((item) => item._id)
-      .filter((id): id is Types.ObjectId => Boolean(id));
-    const linkedByExpense = await this.loadLinkedVouchersByExpenseIds(pageIds);
-
     const totalPaise = totalAgg[0]?.totalPaise ?? 0;
+    const paymentStatuses = await this.paymentStatusByExpense(items);
 
     return {
       items: items.map((item) =>
-        this.toResponse(item, linkedByExpense.get(item._id.toString()) ?? []),
+        this.toResponse(
+          item,
+          paymentStatuses.get(item._id.toString()) ?? 'UNPAID',
+        ),
       ),
       totalAmount: sumPaiseToInr(totalPaise),
-      voucherCounts,
       pagination: {
         page,
         limit,
@@ -186,8 +171,11 @@ export class ExpensesService {
 
   async findOne(id: string): Promise<ExpenseResponse> {
     const expense = await this.findDocumentById(id, true);
-    const linked = await this.loadLinkedVouchersByExpenseIds([expense._id]);
-    return this.toResponse(expense, linked.get(expense._id.toString()) ?? []);
+    const paymentStatuses = await this.paymentStatusByExpense([expense]);
+    return this.toResponse(
+      expense,
+      paymentStatuses.get(expense._id.toString()) ?? 'UNPAID',
+    );
   }
 
   async update(
@@ -211,19 +199,8 @@ export class ExpensesService {
     if (updateExpenseDto.amount !== undefined) {
       update.amountPaise = inrToPaise(updateExpenseDto.amount);
     }
-    if (
-      updateExpenseDto.invoiceDate !== undefined ||
-      updateExpenseDto.date !== undefined
-    ) {
-      update.date = parseExpenseDate(
-        this.resolveInvoiceDateInput(updateExpenseDto),
-      );
-    }
-    if (updateExpenseDto.receivedDate !== undefined) {
-      update.receivedDate =
-        updateExpenseDto.receivedDate === null
-          ? null
-          : parseExpenseDate(updateExpenseDto.receivedDate);
+    if (updateExpenseDto.date !== undefined) {
+      update.date = parseExpenseDate(updateExpenseDto.date);
     }
     if (updateExpenseDto.notes !== undefined) {
       update.notes = updateExpenseDto.notes;
@@ -238,8 +215,7 @@ export class ExpensesService {
       throw new NotFoundException('Expense not found');
     }
 
-    const linked = await this.loadLinkedVouchersByExpenseIds([updated._id]);
-    return this.toResponse(updated, linked.get(updated._id.toString()) ?? []);
+    return this.toResponse(updated);
   }
 
   async remove(id: string): Promise<void> {
@@ -305,8 +281,7 @@ export class ExpensesService {
       await this.safeDeleteReceipt(previousReceipt);
     }
 
-    const linked = await this.loadLinkedVouchersByExpenseIds([updated._id]);
-    return this.toResponse(updated, linked.get(updated._id.toString()) ?? []);
+    return this.toResponse(updated);
   }
 
   async removeReceipt(id: string): Promise<ExpenseResponse> {
@@ -320,11 +295,7 @@ export class ExpensesService {
     await expense.save();
 
     const populated = await this.populateCategory(expense);
-    const linked = await this.loadLinkedVouchersByExpenseIds([populated._id]);
-    return this.toResponse(
-      populated,
-      linked.get(populated._id.toString()) ?? [],
-    );
+    return this.toResponse(populated);
   }
 
   getCategoryDisplayName(
@@ -350,151 +321,6 @@ export class ExpensesService {
     }
 
     return 'Unknown category';
-  }
-
-  private applyVoucherFilters(
-    baseFilter: Record<string, unknown>,
-    query: ExpenseQueryDto,
-    linkedExpenseIds: Types.ObjectId[],
-    fullyCoveredIds: Types.ObjectId[],
-  ): Record<string, unknown> {
-    const filter: Record<string, unknown> = { ...baseFilter };
-    const idConstraints: Record<string, unknown>[] = [];
-
-    if (query.voucherStatus === 'VOUCHERED') {
-      idConstraints.push({ _id: { $in: linkedExpenseIds } });
-    } else if (query.voucherStatus === 'NOT_VOUCHERED') {
-      idConstraints.push({ _id: { $nin: linkedExpenseIds } });
-    }
-
-    if (query.eligibleForVoucher) {
-      idConstraints.push({ _id: { $nin: fullyCoveredIds } });
-    }
-
-    if (idConstraints.length === 0) {
-      return filter;
-    }
-
-    if (idConstraints.length === 1) {
-      return { ...filter, ...idConstraints[0] };
-    }
-
-    const andClauses = [
-      ...(Array.isArray(filter.$and) ? (filter.$and as unknown[]) : []),
-      ...idConstraints,
-    ];
-    const { $and: _ignored, ...rest } = filter;
-    return { ...rest, $and: andClauses };
-  }
-
-  private async resolveFullyCoveredIds(
-    voucheredSums: Map<string, number>,
-  ): Promise<Types.ObjectId[]> {
-    if (voucheredSums.size === 0) {
-      return [];
-    }
-
-    const ids = [...voucheredSums.keys()].map((id) => new Types.ObjectId(id));
-    const expenses = await this.expenseModel
-      .find({ _id: { $in: ids } })
-      .select({ _id: 1, amountPaise: 1 })
-      .lean()
-      .exec();
-
-    const covered: Types.ObjectId[] = [];
-    for (const expense of expenses) {
-      const vouchered = voucheredSums.get(expense._id.toString()) ?? 0;
-      if (vouchered >= (expense.amountPaise ?? 0)) {
-        covered.push(expense._id);
-      }
-    }
-    return covered;
-  }
-
-  private async countVoucherStatuses(
-    baseFilter: Record<string, unknown>,
-  ): Promise<ExpenseVoucherCounts> {
-    const linkedExpenseIds = await this.listLinkedExpenseIds();
-    const [all, vouchered] = await Promise.all([
-      this.expenseModel.countDocuments(baseFilter).exec(),
-      this.expenseModel
-        .countDocuments({ ...baseFilter, _id: { $in: linkedExpenseIds } })
-        .exec(),
-    ]);
-
-    return {
-      all,
-      vouchered,
-      notVouchered: Math.max(0, all - vouchered),
-    };
-  }
-
-  private async listLinkedExpenseIds(): Promise<Types.ObjectId[]> {
-    const ids = await this.voucherModel.distinct('expenseId', {
-      expenseId: { $ne: null },
-      status: { $in: [...ACTIVE_VOUCHER_STATUSES] },
-    });
-    return ids.filter((id): id is Types.ObjectId => id instanceof Types.ObjectId);
-  }
-
-  private async sumVoucheredPaiseByExpense(): Promise<Map<string, number>> {
-    const rows = await this.voucherModel
-      .aggregate<VoucheredSumRow>([
-        {
-          $match: {
-            expenseId: { $ne: null },
-            status: { $in: [...ACTIVE_VOUCHER_STATUSES] },
-          },
-        },
-        {
-          $group: {
-            _id: '$expenseId',
-            voucheredPaise: { $sum: '$amountPaise' },
-          },
-        },
-      ])
-      .exec();
-
-    const map = new Map<string, number>();
-    for (const row of rows) {
-      if (row._id) {
-        map.set(row._id.toString(), row.voucheredPaise ?? 0);
-      }
-    }
-    return map;
-  }
-
-  private async loadLinkedVouchersByExpenseIds(
-    expenseIds: Types.ObjectId[],
-  ): Promise<Map<string, LinkedVoucherSummaryInput[]>> {
-    const map = new Map<string, LinkedVoucherSummaryInput[]>();
-    if (expenseIds.length === 0) {
-      return map;
-    }
-
-    const vouchers = await this.voucherModel
-      .find({
-        expenseId: { $in: expenseIds },
-        status: { $in: [...ACTIVE_VOUCHER_STATUSES] },
-      })
-      .select({ _id: 1, expenseId: 1, voucherNumber: 1, amountPaise: 1, status: 1 })
-      .lean()
-      .exec();
-
-    for (const voucher of vouchers) {
-      const expenseId = voucher.expenseId?.toString();
-      if (!expenseId) continue;
-      const list = map.get(expenseId) ?? [];
-      list.push({
-        _id: voucher._id,
-        voucherNumber: voucher.voucherNumber,
-        amountPaise: voucher.amountPaise,
-        status: voucher.status,
-      });
-      map.set(expenseId, list);
-    }
-
-    return map;
   }
 
   private resolveCategorySummary(expense: ExpenseDocument) {
@@ -527,15 +353,83 @@ export class ExpensesService {
     };
   }
 
-  private resolveInvoiceDateInput(dto: {
-    invoiceDate?: string;
-    date?: string;
-  }): string {
-    const value = dto.invoiceDate ?? dto.date;
-    if (!value) {
-      throw new BadRequestException('Invoice date is required');
-    }
-    return value;
+  private async expenseIdsByPaymentStatus(
+    filter: Record<string, unknown>,
+    paymentStatus: SettlementStatus,
+  ): Promise<Types.ObjectId[]> {
+    const expenses = await this.expenseModel
+      .find(filter)
+      .select({ _id: 1, amountPaise: 1 })
+      .lean()
+      .exec();
+    if (expenses.length === 0) return [];
+
+    const settledByExpense = await this.settledPaiseByExpense(
+      expenses.map((expense) => expense._id),
+    );
+
+    return expenses
+      .filter(
+        (expense) =>
+          settlementStatus(
+            expense.amountPaise,
+            settledByExpense.get(expense._id.toString()) ?? 0,
+          ) === paymentStatus,
+      )
+      .map((expense) => expense._id);
+  }
+
+  private async paymentStatusByExpense(
+    expenses: ExpenseDocument[],
+  ): Promise<Map<string, SettlementStatus>> {
+    const settledByExpense = await this.settledPaiseByExpense(
+      expenses.map((expense) => expense._id),
+    );
+    return new Map(
+      expenses.map((expense) => {
+        const id = expense._id.toString();
+        return [
+          id,
+          settlementStatus(expense.amountPaise, settledByExpense.get(id) ?? 0),
+        ] as const;
+      }),
+    );
+  }
+
+  private async settledPaiseByExpense(
+    expenseIds: Types.ObjectId[],
+  ): Promise<Map<string, number>> {
+    if (expenseIds.length === 0) return new Map();
+
+    const rows = await this.voucherModel
+      .aggregate<{ _id: Types.ObjectId | string; settledPaise: number }>([
+        {
+          $match: {
+            expenseId: { $in: this.expenseIdMatchValues(expenseIds) },
+            status: { $ne: 'CANCELLED' },
+          },
+        },
+        {
+          $group: {
+            _id: '$expenseId',
+            settledPaise: { $sum: { $ifNull: ['$settledPaise', 0] } },
+          },
+        },
+      ])
+      .exec();
+
+    return new Map(
+      rows.map((row) => [row._id.toString(), row.settledPaise] as const),
+    );
+  }
+
+  private expenseIdMatchValues(
+    expenseIds: Types.ObjectId[],
+  ): Array<Types.ObjectId | string> {
+    return expenseIds.flatMap((id) => {
+      const hex = id.toString();
+      return [new Types.ObjectId(hex), hex];
+    });
   }
 
   private async populateCategory(

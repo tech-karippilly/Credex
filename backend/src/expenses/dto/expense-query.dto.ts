@@ -1,6 +1,5 @@
-import { Transform, Type } from 'class-transformer';
+import { Transform } from 'class-transformer';
 import {
-  IsBoolean,
   IsIn,
   IsInt,
   IsMongoId,
@@ -10,11 +9,7 @@ import {
   Max,
   Min,
 } from 'class-validator';
-
-export const EXPENSE_VOUCHER_STATUS_FILTERS = [
-  'NOT_VOUCHERED',
-  'VOUCHERED',
-] as const;
+import { SETTLEMENT_STATUSES } from '../../payments/constants/payment.constants';
 
 export class ExpenseQueryDto {
   @IsOptional()
@@ -32,6 +27,10 @@ export class ExpenseQueryDto {
   to?: string;
 
   @IsOptional()
+  @IsIn(SETTLEMENT_STATUSES)
+  paymentStatus?: (typeof SETTLEMENT_STATUSES)[number];
+
+  @IsOptional()
   @IsString()
   @Matches(/^\d{4}-\d{2}$/)
   month?: string;
@@ -46,32 +45,12 @@ export class ExpenseQueryDto {
   @IsString()
   search?: string;
 
-  /** Filter by whether an active voucher is linked via voucher.expenseId. */
   @IsOptional()
-  @IsIn(EXPENSE_VOUCHER_STATUS_FILTERS)
-  voucherStatus?: (typeof EXPENSE_VOUCHER_STATUS_FILTERS)[number];
-
-  /**
-   * When true, only expenses with remaining eligible amount for voucher
-   * creation (expense amount not fully covered by active linked vouchers).
-   */
-  @IsOptional()
-  @Transform(({ value }) => {
-    if (value === true || value === 'true' || value === '1') return true;
-    if (value === false || value === 'false' || value === '0') return false;
-    return value;
-  })
-  @IsBoolean()
-  eligibleForVoucher?: boolean;
-
-  @IsOptional()
-  @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number = 1;
 
   @IsOptional()
-  @Type(() => Number)
   @IsInt()
   @Min(1)
   @Max(100)

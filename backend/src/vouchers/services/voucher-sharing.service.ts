@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { COMPANY } from '../../common/constants/company.constants';
 import { EmailService } from '../../email/email.service';
 import { WhatsappService } from '../../whatsapp/whatsapp.service';
 import { SendVoucherEmailDto } from '../dto/send-voucher-email.dto';
@@ -46,7 +47,7 @@ export class VoucherSharingService {
       const attachment = await this.resolvePdfAttachment(voucher);
       const sendResult = await this.emailService.sendEmail({
         to: dto.email,
-        subject: `Voucher ${voucher.voucherNumber} from Credex`,
+        subject: `Voucher ${voucher.voucherNumber} from ${COMPANY.brand}`,
         html: buildVoucherEmailHtml(voucher, dto.message),
         text: buildVoucherEmailText(voucher, dto.message),
         attachments: attachment

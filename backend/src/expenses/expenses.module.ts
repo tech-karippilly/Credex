@@ -9,6 +9,7 @@ import { Voucher, VoucherSchema } from '../vouchers/schemas/voucher.schema';
 import { ExpensesController } from './expenses.controller';
 import { ExpensesService } from './expenses.service';
 import { Expense, ExpenseSchema } from './schemas/expense.schema';
+import { Voucher, VoucherSchema } from '../vouchers/schemas/voucher.schema';
 import { ExpenseExcelService } from './services/expense-excel.service';
 import { ExpenseReportService } from './services/expense-report.service';
 import { ReceiptAiService } from './services/receipt-ai.service';
@@ -32,5 +33,6 @@ import { ReceiptAiService } from './services/receipt-ai.service';
     ExpenseReportService,
     ExpenseExcelService,
   ],
+  exports: [ExpensesService],
 })
 export class ExpensesModule {}

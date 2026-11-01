@@ -17,7 +17,7 @@ export class ApiError extends Error {
 }
 
 /** Local Nest API. Used only when developing on this machine. */
-const LOCAL_API_BASE_URL = "http://127.0.0.1:1000/api/v1";
+const LOCAL_API_BASE_URL = "http://127.0.0.1:10000/api/v1";
 
 export class ApiConfigError extends Error {
   constructor(message: string) {

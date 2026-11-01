@@ -32,7 +32,7 @@ export const company = {
 };
 
 export const nav = [
-  { to: "/", label: "Home" },
+  { to: "/home", label: "Home" },
   { to: "/services", label: "Platform" },
   { to: "/solutions", label: "Modules" },
   { to: "/about", label: "Company" },

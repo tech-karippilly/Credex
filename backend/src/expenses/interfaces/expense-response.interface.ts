@@ -1,3 +1,5 @@
+import { SettlementStatus } from '../../payments/constants/payment.constants';
+
 export interface ExpenseReceiptResponse {
   url: string;
   publicId: string;
@@ -10,13 +12,6 @@ export interface ExpenseCategorySummary {
   name: string;
 }
 
-export interface ExpenseLinkedVoucherSummary {
-  id: string;
-  voucherNumber: string;
-  amount: number;
-  status: string;
-}
-
 export interface ExpenseResponse {
   id: string;
   expenseName: string;
@@ -24,36 +19,20 @@ export interface ExpenseResponse {
   category: ExpenseCategorySummary;
   paidBy: string;
   amount: number;
+  paymentStatus: SettlementStatus;
   currency: string;
-  /** @deprecated Use invoiceDate. Kept for backward compatibility; same value as invoiceDate. */
   date: string;
-  /** Supplier invoice / bill date (YYYY-MM-DD). */
-  invoiceDate: string;
-  /** Date the company received the invoice, when tracked (YYYY-MM-DD). */
-  receivedDate: string | null;
   receipt: ExpenseReceiptResponse | null;
   notes: string;
-  /** Derived from active vouchers linked via voucher.expenseId. */
-  voucherStatus: 'NOT_VOUCHERED' | 'VOUCHERED';
-  /** Sum of active linked voucher amounts (INR). */
-  voucheredAmount: number;
-  /** max(0, expense amount - vouchered amount) in INR. */
-  remainingEligibleAmount: number;
-  vouchers: ExpenseLinkedVoucherSummary[];
+  fixedExpenseId: string | null;
+  generatedForMonth: string | null;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface ExpenseVoucherCounts {
-  all: number;
-  notVouchered: number;
-  vouchered: number;
 }
 
 export interface ExpenseListResponse {
   items: ExpenseResponse[];
   totalAmount: number;
-  voucherCounts: ExpenseVoucherCounts;
   pagination: {
     page: number;
     limit: number;
@@ -68,9 +47,7 @@ export interface ReceiptAnalysisResponse {
   categoryName: string | null;
   paidBy: string | null;
   amount: number | null;
-  /** Extracted supplier invoice / transaction date. */
   date: string | null;
-  invoiceDate: string | null;
   notes: string | null;
   confidence?: number;
 }
