@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { FilterQuery, isValidObjectId, Model } from 'mongoose';
+import { isValidObjectId, Model } from 'mongoose';
 import { Employee, EmployeeDocument } from '../employees/schemas/employee.schema';
 import { ATTENDANCE_REGISTER_STATUSES } from './constants/attendance.constants';
 import { AttendanceDayQueryDto } from './dto/attendance-day-query.dto';
@@ -112,7 +112,7 @@ export class AttendanceService {
   private async findRegisterEmployees(
     query: Pick<AttendanceDayQueryDto, 'department' | 'search'>,
   ): Promise<EmployeeDocument[]> {
-    const filter: FilterQuery<EmployeeDocument> = {
+    const filter: Record<string, unknown> = {
       status: { $in: [...ATTENDANCE_REGISTER_STATUSES] },
     };
 
