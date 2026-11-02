@@ -79,6 +79,22 @@ function FieldError({ id, message }: { id: string; message?: string }) {
   return <p id={id} className="mt-1 text-sm text-destructive">{message}</p>;
 }
 
+function expenseHasLinkedVouchers(expense: Expense): boolean {
+  if (expense.voucherStatus === "VOUCHERED") return true;
+  return (expense.vouchers?.length ?? 0) > 0;
+}
+
+function expenseCanCreateVoucher(expense: Expense): boolean {
+  if (expense.remainingEligibleAmount === undefined) return true;
+  return expense.remainingEligibleAmount > 0;
+}
+
+function voucherIconTitle(expense: Expense): string {
+  const numbers = expense.vouchers?.map((voucher) => voucher.voucherNumber).join(", ");
+  if (numbers) return `Linked vouchers: ${numbers}`;
+  return "This expense has linked vouchers";
+}
+
 export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }) {
   const can = useCan();
   const apiCapabilities = useApiCapabilities();
@@ -460,6 +476,7 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
                 <th className="p-4">Paid By</th>
                 <th className="p-4 text-right">Amount (₹)</th>
                 <th className="p-4">Payment</th>
+                <th className="p-4 text-center">Voucher</th>
                 <th className="p-4">Receipt</th>
                 <th className="p-4 text-right">Actions</th>
               </tr>
@@ -473,6 +490,19 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
                   <td className="p-4">{expense.paidBy}</td>
                   <td className="whitespace-nowrap p-4 text-right font-semibold">{inr(Number(expense.amount))}</td>
                   <td className="whitespace-nowrap p-4">{paymentLabel(expense.paymentStatus)}</td>
+                  <td className="p-4 text-center">
+                    {expenseHasLinkedVouchers(expense) ? (
+                      <span
+                        className="inline-flex text-primary"
+                        title={voucherIconTitle(expense)}
+                        aria-label={voucherIconTitle(expense)}
+                      >
+                        <Receipt className="h-4 w-4" aria-hidden />
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
                   <td className="p-4">
                     {expense.receipt?.url ? (
                       <div className="flex flex-nowrap gap-1">
@@ -503,7 +533,17 @@ export function ExpensesPanel({ onVoucher }: { onVoucher: (e: Expense) => void }
                   <td className="p-4">
                     <div className="flex justify-end gap-1">
                       {can("expenses.update") && <button type="button" title="Edit" aria-label="Edit expense" onClick={() => openEdit(expense)} className="btn btn-outline h-8 px-2"><Pencil className="h-4 w-4" /></button>}
-                      {can("vouchers.create") && <button type="button" title="Create voucher" aria-label="Create voucher" onClick={() => onVoucher(expense)} className="btn btn-outline h-8 px-2"><Receipt className="h-4 w-4" /></button>}
+                      {can("vouchers.create") && expenseCanCreateVoucher(expense) && (
+                        <button
+                          type="button"
+                          title="Create voucher"
+                          aria-label="Create voucher"
+                          onClick={() => onVoucher(expense)}
+                          className="btn btn-outline h-8 px-2"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      )}
                       {can("expenses.delete") && <button type="button" title="Delete" aria-label="Delete expense" onClick={() => del(expense)} className="btn btn-outline h-8 px-2 text-destructive"><Trash2 className="h-4 w-4" /></button>}
                     </div>
                   </td>

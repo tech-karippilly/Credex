@@ -504,6 +504,51 @@ describe('Expenses (e2e)', () => {
       expect(statuses[partial.id]).toBe('PARTIALLY_PAID');
       expect(statuses[cancelled.id]).toBe('UNPAID');
     });
+
+    it('returns voucher linkage on expenses with active linked vouchers', async () => {
+      const token = await loginAsAdmin();
+      const bare = await createExpense(token, {
+        expenseName: 'No voucher yet',
+        amount: 50,
+      });
+      const linked = await createExpense(token, {
+        expenseName: 'With voucher',
+        amount: 200,
+      });
+
+      await voucherModel.create({
+        voucherNumber: 'PV-LINK-1',
+        voucherDate: new Date('2026-10-08'),
+        voucherType: 'PAYMENT',
+        title: 'Linked',
+        paidBy: 'Vishnu KV',
+        payee: 'Vendor',
+        amountPaise: 20000,
+        currency: 'INR',
+        paymentMode: 'UPI',
+        status: 'COMPLETED',
+        expenseId: new Types.ObjectId(linked.id),
+      });
+
+      const list = await request(app.getHttpServer())
+        .get('/api/v1/expenses')
+        .set('Authorization', `Bearer ${token}`)
+        .expect(200);
+
+      const bareRow = list.body.data.items.find(
+        (item: { id: string }) => item.id === bare.id,
+      );
+      const linkedRow = list.body.data.items.find(
+        (item: { id: string }) => item.id === linked.id,
+      );
+
+      expect(bareRow.voucherStatus).toBe('NOT_VOUCHERED');
+      expect(bareRow.vouchers).toEqual([]);
+      expect(linkedRow.voucherStatus).toBe('VOUCHERED');
+      expect(linkedRow.vouchers).toEqual([
+        { id: expect.any(String), voucherNumber: 'PV-LINK-1' },
+      ]);
+    });
   });
 
   describe('Receipts', () => {

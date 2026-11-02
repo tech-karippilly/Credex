@@ -9,6 +9,13 @@ export type ExpenseReceipt = {
 
 export type ExpensePaymentStatus = "PAID" | "UNPAID" | "PARTIALLY_PAID";
 
+export type ExpenseVoucherStatus = "NOT_VOUCHERED" | "VOUCHERED";
+
+export type ExpenseLinkedVoucher = {
+  id: string;
+  voucherNumber: string;
+};
+
 export type Expense = {
   id: string;
   expenseName: string;
@@ -17,6 +24,10 @@ export type Expense = {
   paidBy: string;
   amount: number;
   paymentStatus: ExpensePaymentStatus;
+  voucherStatus?: ExpenseVoucherStatus;
+  voucheredAmount?: number;
+  remainingEligibleAmount?: number;
+  vouchers?: ExpenseLinkedVoucher[];
   currency: string;
   date: string;
   receipt: ExpenseReceipt | null;

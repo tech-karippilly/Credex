@@ -1,4 +1,10 @@
 import { SettlementStatus } from '../../payments/constants/payment.constants';
+import { ExpenseVoucherStatus } from '../utils/expense-voucher.util';
+
+export interface ExpenseLinkedVoucherSummary {
+  id: string;
+  voucherNumber: string;
+}
 
 export interface ExpenseReceiptResponse {
   url: string;
@@ -20,6 +26,11 @@ export interface ExpenseResponse {
   paidBy: string;
   amount: number;
   paymentStatus: SettlementStatus;
+  /** At least one active (draft/completed) voucher linked to this expense. */
+  voucherStatus: ExpenseVoucherStatus;
+  voucheredAmount: number;
+  remainingEligibleAmount: number;
+  vouchers: ExpenseLinkedVoucherSummary[];
   currency: string;
   /** Legacy alias for supplier invoice date (same as invoiceDate). */
   date: string;
