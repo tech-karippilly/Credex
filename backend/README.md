@@ -178,7 +178,8 @@ Example response:
     "capabilities": {
       "expensePaymentStatusFilter": true,
       "employees": true,
-      "fixedExpenses": true
+      "fixedExpenses": true,
+      "attendance": true
     }
   }
 }

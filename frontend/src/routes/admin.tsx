@@ -5,6 +5,7 @@ import {
   LayoutDashboard, Settings, Layers, Briefcase, FileText, Inbox, LogOut, Loader2, Plus, Trash2,
   Save, ExternalLink, Upload, Eye, EyeOff, Download, Wallet, Receipt, Tags, Banknote, BarChart3,
   Users, Shield, Contact, IdCard, ChevronRight, UserRound,   Building2, IndianRupee, CalendarClock,
+  CalendarCheck,
 } from "lucide-react";
 import { AdminAccessProvider, useCan } from "@/components/admin/admin-access";
 import { ApiCapabilitiesProvider } from "@/components/admin/api-capabilities-context";
@@ -16,6 +17,7 @@ import { LeadsPanel } from "@/components/admin/leads-panel";
 import { DepartmentsPanel, DesignationsPanel } from "@/components/admin/departments-panel";
 import { EmployeesPanel } from "@/components/admin/employees-panel";
 import { SalariesPanel } from "@/components/admin/salaries-panel";
+import { AttendancePanel } from "@/components/admin/attendance-panel";
 import { UsersPanel } from "@/components/admin/users-panel";
 import { Logo } from "@/components/site/Logo";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -246,6 +248,7 @@ const TAB_ICONS: Record<Tab, typeof Settings> = {
   reports: BarChart3,
   employees: UserRound,
   salaries: IndianRupee,
+  attendance: CalendarCheck,
   departments: Building2,
   designations: UserRound,
   users: Users,
@@ -474,6 +477,7 @@ function Dashboard({
         )}
         {tab === "employees" && <EmployeesPanel key={employeeListKey} />}
         {tab === "salaries" && <SalariesPanel />}
+        {tab === "attendance" && <AttendancePanel />}
         {tab === "departments" && <DepartmentsPanel />}
         {tab === "designations" && <DesignationsPanel />}
         {tab === "users" && <UsersPanel />}

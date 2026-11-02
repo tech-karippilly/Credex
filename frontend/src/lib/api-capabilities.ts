@@ -4,6 +4,7 @@ export type ApiCapabilities = {
   expensePaymentStatusFilter: boolean;
   employees: boolean;
   fixedExpenses: boolean;
+  attendance: boolean;
 };
 
 /** Used until /health responds with a capabilities block (legacy api.credexfin.com builds). */
@@ -11,6 +12,7 @@ export const LEGACY_API_CAPABILITIES: ApiCapabilities = {
   expensePaymentStatusFilter: false,
   employees: false,
   fixedExpenses: false,
+  attendance: false,
 };
 
 function parseCapabilities(raw: unknown): ApiCapabilities | null {
@@ -20,6 +22,7 @@ function parseCapabilities(raw: unknown): ApiCapabilities | null {
     expensePaymentStatusFilter: record.expensePaymentStatusFilter === true,
     employees: record.employees === true,
     fixedExpenses: record.fixedExpenses === true,
+    attendance: record.attendance === true,
   };
 }
 
@@ -48,6 +51,7 @@ export async function fetchApiCapabilities(): Promise<ApiCapabilities> {
 
 export function adminTabNeedsCapability(tab: string): keyof ApiCapabilities | null {
   if (tab === "fixed-expenses") return "fixedExpenses";
+  if (tab === "attendance") return "attendance";
   if (tab === "employees" || tab === "salaries" || tab === "departments" || tab === "designations") {
     return "employees";
   }

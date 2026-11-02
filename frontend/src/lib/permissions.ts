@@ -15,6 +15,7 @@ export type AdminTab =
   | "reports"
   | "employees"
   | "salaries"
+  | "attendance"
   | "departments"
   | "designations"
   | "users"
@@ -107,6 +108,12 @@ export const ADMIN_NAV: readonly AdminNavItem[] = [
     anyOf: ["salaries.read"],
   },
   {
+    id: "attendance",
+    label: "Attendance",
+    group: "hr",
+    anyOf: ["attendance.read"],
+  },
+  {
     id: "departments",
     label: "Departments",
     group: "hr",
@@ -140,6 +147,7 @@ export const PERMISSION_MODULE_LABELS: Record<string, string> = {
   reports: "Reports",
   employees: "Employees",
   salaries: "Salary",
+  attendance: "Attendance",
 };
 
 const ACTION_LABELS: Record<string, string> = {

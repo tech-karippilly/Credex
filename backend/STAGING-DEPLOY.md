@@ -19,7 +19,8 @@ After a correct deploy, `data.capabilities` includes:
 {
   "expensePaymentStatusFilter": true,
   "employees": true,
-  "fixedExpenses": true
+  "fixedExpenses": true,
+  "attendance": true
 }
 ```
 

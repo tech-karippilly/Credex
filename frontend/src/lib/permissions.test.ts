@@ -167,6 +167,25 @@ describe("admin permission helpers", () => {
     });
   });
 
+  it("places Attendance under the HR menu", () => {
+    const access = { superAdmin: false, permissions: ["attendance.read"] };
+    expect(canSeeAdminTab(access, "attendance")).toBe(true);
+    const hr = adminNavSections(access).find(
+      (section) => section.type === "group" && section.id === "hr",
+    );
+    expect(hr).toEqual({
+      type: "group",
+      id: "hr",
+      label: "HR",
+      items: [
+        expect.objectContaining({
+          id: "attendance",
+          label: "Attendance",
+        }),
+      ],
+    });
+  });
+
   it("places finance modules under Expenses Management", () => {
     const access = {
       superAdmin: false,

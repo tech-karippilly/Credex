@@ -20,6 +20,7 @@ describe('permission catalogue', () => {
     expect([...modules].sort()).toEqual(
       [
         'applications',
+        'attendance',
         'careers',
         'employees',
         'enquiries',

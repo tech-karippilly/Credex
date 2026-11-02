@@ -139,4 +139,7 @@ export const PERMISSION_CATALOGUE: readonly PermissionDefinition[] = [
 
   permission('salaries', 'read', 'View employee salaries'),
   permission('salaries', 'update', 'Update employee salary details'),
+
+  permission('attendance', 'read', 'View employee attendance'),
+  permission('attendance', 'update', 'Mark or update employee attendance'),
 ];
